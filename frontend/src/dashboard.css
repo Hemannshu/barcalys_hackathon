@@ -1,0 +1,104 @@
+/* Dashboard.css */
+.dashboard-container {
+    max-width: 1200px;
+    margin: 0 auto;
+    padding: 20px;
+  }
+  
+  .back-button {
+    background: #3498db;
+    color: white;
+    border: none;
+    padding: 8px 16px;
+    border-radius: 4px;
+    cursor: pointer;
+    margin-bottom: 20px;
+  }
+  
+  .password-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+    gap: 20px;
+  }
+  
+  .password-card {
+    background: white;
+    border-radius: 8px;
+    padding: 20px;
+    box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+  }
+  
+  .password-card.A {
+    border-left: 4px solid #4CAF50;
+  }
+  
+  .password-card.B {
+    border-left: 4px solid #8BC34A;
+  }
+  
+  .password-card.C {
+    border-left: 4px solid #FFC107;
+  }
+  
+  .password-card.D {
+    border-left: 4px solid #FF9800;
+  }
+  
+  .password-card.F {
+    border-left: 4px solid #F44336;
+  }
+  
+  .strength-badge {
+    display: inline-block;
+    width: 30px;
+    height: 30px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: bold;
+    margin: 10px 0;
+  }
+  
+  .password-card.A .strength-badge {
+    background: #4CAF50;
+    color: white;
+  }
+  
+  .password-card.B .strength-badge {
+    background: #8BC34A;
+    color: white;
+  }
+  
+  .password-card.C .strength-badge {
+    background: #FFC107;
+  }
+  
+  .password-card.D .strength-badge {
+    background: #FF9800;
+    color: white;
+  }
+  
+  .password-card.F .strength-badge {
+    background: #F44336;
+    color: white;
+  }
+  
+  .warning {
+    color: #F44336;
+    font-weight: bold;
+  }
+  
+  .recommendation {
+    font-style: italic;
+    margin: 10px 0;
+  }
+  
+  .action-button {
+    background: #3498db;
+    color: white;
+    border: none;
+    padding: 8px 16px;
+    border-radius: 4px;
+    cursor: pointer;
+  }

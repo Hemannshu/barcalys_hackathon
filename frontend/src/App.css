@@ -1,0 +1,550 @@
+:root {
+  --critical: #ff3860;
+  --high: #ff7043;
+  --medium: #ffb74d;
+  --low: #66bb6a;
+  --very-strong: #2e7d32;
+  --strong: #689f38;
+  --moderate: #ffa000;
+  --weak: #f57c00;
+  --very-weak: #d32f2f;
+  --bg-color: #f5f7fa;
+  --card-bg: #ffffff;
+  --text-color: #333;
+  --text-light: #666;
+  --border-radius: 12px;
+  --shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+}
+
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+  background-color: var(--bg-color);
+  color: var(--text-color);
+  line-height: 1.6;
+}
+
+.app {
+  max-width: 800px;
+  margin: 0 auto;
+  padding: 2rem;
+}
+
+.header {
+  text-align: center;
+  margin-bottom: 2rem;
+}
+
+.logo {
+  height: 60px;
+  margin-bottom: 1rem;
+}
+
+.password-checker {
+  background: var(--card-bg);
+  border-radius: var(--border-radius);
+  padding: 2rem;
+  box-shadow: var(--shadow);
+  position: relative;
+}
+
+.input-group {
+  display: flex;
+  margin-bottom: 1.5rem;
+  position: relative;
+}
+
+.password-input {
+  flex: 1;
+  padding: 1rem;
+  border: 2px solid #ddd;
+  border-radius: var(--border-radius);
+  font-size: 1rem;
+  transition: border-color 0.3s;
+}
+
+.password-input:focus {
+  outline: none;
+  border-color: #4a89dc;
+}
+
+.toggle-visibility {
+  background: none;
+  border: none;
+  cursor: pointer;
+  font-size: 1.2rem;
+  margin-left: 0.5rem;
+  padding: 0.5rem 1rem;
+  border-radius: var(--border-radius);
+  background-color: #f0f0f0;
+  transition: background-color 0.3s;
+}
+
+.toggle-visibility:hover {
+  background-color: #e0e0e0;
+}
+
+.strength-meter {
+  height: 10px;
+  background-color: #eee;
+  border-radius: 5px;
+  margin-bottom: 1rem;
+  overflow: hidden;
+}
+
+.strength-fill {
+  height: 100%;
+  width: 0%;
+  transition: width 0.5s ease, background-color 0.5s ease;
+}
+
+.strength-0 { width: 20%; background-color: var(--very-weak); }
+.strength-1 { width: 40%; background-color: var(--weak); }
+.strength-2 { width: 60%; background-color: var(--moderate); }
+.strength-3 { width: 80%; background-color: var(--strong); }
+.strength-4 { width: 100%; background-color: var(--very-strong); }
+
+.strength-info {
+  display: flex;
+  justify-content: space-between;
+  margin-bottom: 1.5rem;
+  font-weight: bold;
+}
+
+.button-group {
+  display: flex;
+  gap: 10px;
+  margin-top: 1rem;
+}
+
+.analyze-btn {
+  width: 100%;
+  padding: 1rem;
+  background-color: #4a89dc;
+  color: white;
+  border: none;
+  border-radius: var(--border-radius);
+  font-size: 1rem;
+  font-weight: bold;
+  cursor: pointer;
+  transition: background-color 0.3s;
+  flex: 1;
+}
+
+.analyze-btn:hover {
+  background-color: #3b7dd8;
+}
+
+.analyze-btn.loading {
+  background-color: #a0a0a0;
+  cursor: not-allowed;
+}
+
+.fix-btn {
+  background-color: #6c757d;
+  color: white;
+  padding: 1rem;
+  border: none;
+  border-radius: var(--border-radius);
+  font-size: 1rem;
+  cursor: pointer;
+  transition: background-color 0.3s;
+  flex: 1;
+}
+
+.fix-btn:hover {
+  background-color: #5a6268;
+}
+
+.fix-btn:disabled {
+  background-color: #cccccc;
+  cursor: not-allowed;
+}
+
+.suggestions-popup {
+  position: absolute;
+  background: white;
+  border: 1px solid #ddd;
+  border-radius: var(--border-radius);
+  padding: 1rem;
+  margin-top: 10px;
+  box-shadow: var(--shadow);
+  z-index: 100;
+  width: calc(100% - 4rem);
+}
+
+.suggestions-popup h4 {
+  margin-bottom: 0.5rem;
+  color: #333;
+}
+
+.suggestions-popup ul {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+
+.suggestions-popup li {
+  margin: 0.75rem 0;
+}
+
+.suggestion-container {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.suggestion-btn {
+  background: none;
+  border: 1px solid #4a89dc;
+  color: #4a89dc;
+  padding: 0.5rem;
+  border-radius: 4px;
+  cursor: pointer;
+  flex: 1;
+  text-align: left;
+  transition: all 0.3s;
+  font-family: monospace;
+  word-break: break-all;
+}
+
+.suggestion-btn:hover {
+  background-color: #4a89dc;
+  color: white;
+}
+
+.strength-badge {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  width: 80px;
+}
+
+.strength-meter-mini {
+  height: 6px;
+  background-color: #eee;
+  border-radius: 3px;
+  flex: 1;
+  overflow: hidden;
+}
+
+.strength-fill-mini {
+  height: 100%;
+  background-color: #4CAF50;
+  transition: width 0.5s ease;
+}
+
+.close-btn {
+  display: block;
+  margin-top: 1rem;
+  background: #f5f7fa;
+  border: none;
+  padding: 0.5rem 1rem;
+  border-radius: 4px;
+  cursor: pointer;
+  width: 100%;
+}
+
+.loading-spinner {
+  display: flex;
+  justify-content: center;
+  margin-top: 1rem;
+}
+
+.spinner {
+  width: 30px;
+  height: 30px;
+  border: 4px solid rgba(0, 0, 0, 0.1);
+  border-radius: 50%;
+  border-top-color: #4a89dc;
+  animation: spin 1s ease-in-out infinite;
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+.results-container {
+  margin-top: 2rem;
+  animation: fadeIn 0.5s ease;
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(10px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.metrics-section h3,
+.vulnerabilities-section h3,
+.suggestions-section h3 {
+  margin-bottom: 1rem;
+  color: #2c3e50;
+  border-bottom: 2px solid #eee;
+  padding-bottom: 0.5rem;
+}
+
+.metrics-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 1rem;
+  margin-bottom: 2rem;
+}
+
+.metric-card {
+  background: var(--card-bg);
+  border-radius: var(--border-radius);
+  padding: 1.5rem;
+  text-align: center;
+  box-shadow: var(--shadow);
+}
+
+.metric-value {
+  font-size: 1.8rem;
+  font-weight: bold;
+  margin-bottom: 0.5rem;
+}
+
+.metric-label {
+  color: var(--text-light);
+  font-size: 0.9rem;
+}
+
+.weakness-review {
+  margin-bottom: 2rem;
+}
+
+.weakness-cards {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+  gap: 1rem;
+  margin-top: 1rem;
+}
+
+.weakness-card {
+  background: var(--card-bg);
+  border-radius: var(--border-radius);
+  padding: 1.5rem;
+  box-shadow: var(--shadow);
+  border-left: 4px solid;
+  transition: transform 0.3s;
+}
+
+.weakness-card:hover {
+  transform: translateY(-3px);
+}
+
+.weakness-card.critical {
+  border-color: var(--critical);
+}
+
+.weakness-card.high {
+  border-color: var(--high);
+}
+
+.weakness-card.medium {
+  border-color: var(--medium);
+}
+
+.weakness-card.low {
+  border-color: var(--low);
+}
+
+.weakness-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 0.5rem;
+}
+
+.weakness-header h4 {
+  font-size: 1.1rem;
+  color: #333;
+}
+
+.weakness-severity {
+  text-transform: capitalize;
+  font-weight: bold;
+  padding: 0.25rem 0.5rem;
+  border-radius: 4px;
+  font-size: 0.8rem;
+}
+
+.weakness-card.critical .weakness-severity {
+  background-color: var(--critical);
+  color: white;
+}
+
+.weakness-card.high .weakness-severity {
+  background-color: var(--high);
+  color: white;
+}
+
+.weakness-card.medium .weakness-severity {
+  background-color: var(--medium);
+  color: white;
+}
+
+.weakness-card.low .weakness-severity {
+  background-color: var(--low);
+  color: white;
+}
+
+.weakness-description {
+  color: var(--text-light);
+  font-size: 0.95rem;
+  line-height: 1.5;
+}
+
+.vulnerabilities-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
+  gap: 1.5rem;
+  margin-bottom: 2rem;
+}
+
+.vulnerability-card {
+  background: var(--card-bg);
+  border-radius: var(--border-radius);
+  padding: 1.5rem;
+  box-shadow: var(--shadow);
+  border-top: 4px solid;
+  transition: transform 0.3s;
+}
+
+.vulnerability-card:hover {
+  transform: translateY(-5px);
+}
+
+.vulnerability-card.critical {
+  border-color: var(--critical);
+}
+
+.vulnerability-card.high {
+  border-color: var(--high);
+}
+
+.vulnerability-card.medium {
+  border-color: var(--medium);
+}
+
+.vulnerability-card.low {
+  border-color: var(--low);
+}
+
+.vulnerability-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 1rem;
+}
+
+.vulnerability-header h4 {
+  font-size: 1.1rem;
+}
+
+.risk-score {
+  font-weight: bold;
+  font-size: 1.2rem;
+}
+
+.vulnerability-card.critical .risk-score {
+  color: var(--critical);
+}
+
+.vulnerability-card.high .risk-score {
+  color: var(--high);
+}
+
+.vulnerability-card.medium .risk-score {
+  color: var(--medium);
+}
+
+.vulnerability-card.low .risk-score {
+  color: var(--low);
+}
+
+.risk-meter {
+  height: 6px;
+  background-color: #eee;
+  border-radius: 3px;
+  margin-top: 1rem;
+  overflow: hidden;
+}
+
+.risk-meter-fill {
+  height: 100%;
+  transition: width 0.5s ease;
+}
+
+.vulnerability-card.critical .risk-meter-fill {
+  background-color: var(--critical);
+}
+
+.vulnerability-card.high .risk-meter-fill {
+  background-color: var(--high);
+}
+
+.vulnerability-card.medium .risk-meter-fill {
+  background-color: var(--medium);
+}
+
+.vulnerability-card.low .risk-meter-fill {
+  background-color: var(--low);
+}
+
+.suggestions-list {
+  list-style-type: none;
+  background: var(--card-bg);
+  border-radius: var(--border-radius);
+  padding: 1.5rem;
+  box-shadow: var(--shadow);
+}
+
+.suggestions-list li {
+  margin-bottom: 0.5rem;
+  display: flex;
+  align-items: flex-start;
+}
+
+.suggestion-bullet {
+  color: #4a89dc;
+  margin-right: 0.5rem;
+  font-weight: bold;
+}
+
+@media (max-width: 768px) {
+  .app {
+    padding: 1rem;
+  }
+  
+  .metrics-grid {
+    grid-template-columns: 1fr;
+  }
+  
+  .vulnerabilities-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .weakness-cards {
+    grid-template-columns: 1fr;
+  }
+
+  .button-group {
+    flex-direction: column;
+  }
+  
+  .suggestion-container {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+  
+  .strength-badge {
+    width: 100%;
+    justify-content: flex-end;
+  }
+}
