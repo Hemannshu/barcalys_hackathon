@@ -5,6 +5,7 @@ import Sidebar from './sidebar';
 import MainPage from './MainPage';
 import PasswordHealthDashboard from './PasswordHealthDashboard';
 import Dashboard from './Dashboard';
+import VulnerabilityAnalysisPage from './VulnerabilityAnalysisPage';
 
 function App() {
   const [password, setPassword] = useState('');
@@ -29,6 +30,7 @@ function App() {
             />
             <Route path="/password-health" element={<PasswordHealthDashboard />} />
             <Route path="/dashboard" element={<Dashboard />} />
+            <Route path="/vulnerability-analysis" element={<VulnerabilityAnalysisPage />} />
           </Routes>
         </main>
       </div>
