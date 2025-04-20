@@ -28,6 +28,15 @@ const Sidebar = () => {
             <span className="nav-icon">📊</span>
             <span className="nav-text">Security Dashboard</span>
           </Link>
+          <div className="nav-divider"></div>
+          <Link to="/login" className="nav-item">
+            <span className="nav-icon">🔑</span>
+            <span className="nav-text">Login</span>
+          </Link>
+          <Link to="/signup" className="nav-item">
+            <span className="nav-icon">✨</span>
+            <span className="nav-text">Sign Up</span>
+          </Link>
         </nav>
       </div>
     </div>
