@@ -25,12 +25,32 @@ const LoginPage = () => {
     setIsLoading(true);
 
     try {
-      // TODO: Implement actual login logic here
-      // For now, we'll just simulate a successful login
-      await new Promise(resolve => setTimeout(resolve, 1000));
+      const response = await fetch('http://localhost:5000/api/auth/login', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          email: formData.email,
+          password: formData.password,
+        }),
+      });
+
+      if (!response.ok) {
+        const data = await response.json();
+        throw new Error(data.message || 'Login failed');
+      }
+
+      const data = await response.json();
+      
+      // Store the token and user info
+      localStorage.setItem('token', data.token);
+      localStorage.setItem('user', JSON.stringify(data.user));
+      
+      // Navigate to dashboard
       navigate('/dashboard');
     } catch (err) {
-      setError('Invalid email or password');
+      setError(err.message || 'Invalid email or password');
     } finally {
       setIsLoading(false);
     }

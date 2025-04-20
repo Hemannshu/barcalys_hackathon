@@ -1,82 +1,252 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import './dashboard.css';
+import './PasswordHealthDashboard.css';
 
 const PasswordHealthDashboard = () => {
-    const navigate = useNavigate();
+  const [passwords, setPasswords] = useState([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState(null);
+  const navigate = useNavigate();
 
-    const handleBack = () => {
-        navigate('/'); // Navigates back to the main page
-    };
-
-    // Sample data for the dashboard (this can be dynamic, fetched from an API or state)
-    const passwordHealthScore = 78;
-    const criticalIssues = 2;
-    const warnings = 5;
-    const securePasswords = 12;
-    const dataBreachAlerts = [
-        { name: "Adobe", date: "October 2023", type: "User accounts exposed", details: ["Email", "Password", "Name"] },
-        { name: "LinkedIn", date: "June 2023", type: "Credentials exposed", details: ["Email", "Password Hash"] }
+  useEffect(() => {
+    // In a real app, you would fetch the user's passwords from the backend
+    // For now, we'll use some sample passwords
+    const samplePasswords = [
+      { id: 1, service: 'Email', username: 'user@example.com', password: 'Summer2024', lastChanged: '2023-01-15' },
+      { id: 2, service: 'Social Media', username: 'user123', password: 'qwerty123', lastChanged: '2022-11-30' },
+      { id: 3, service: 'Banking', username: 'user456', password: 'P@ssw0rd!', lastChanged: '2023-03-10' },
+      { id: 4, service: 'Shopping', username: 'user789', password: '12345678', lastChanged: '2022-09-05' },
+      { id: 5, service: 'Work', username: 'user.work', password: 'Welcome2023!', lastChanged: '2023-02-20' }
     ];
 
-    return (
-        <div className="health-dashboard">
-            <h2>Password Health Center</h2>
-            <button onClick={handleBack} className="back-button">← Back to Analyzer</button>
+    // Analyze each password
+    const analyzePasswords = async () => {
+      setIsLoading(true);
+      setError(null);
+      
+      try {
+        // Get token from localStorage
+        const token = localStorage.getItem('token');
+        if (!token) {
+          setError('Authentication required. Please log in.');
+          navigate('/login');
+          return;
+        }
+        
+        const analyzedPasswords = [];
+        
+        for (const pwd of samplePasswords) {
+          try {
+            const response = await fetch('http://localhost:5000/api/analyze', {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${token}`
+              },
+              body: JSON.stringify({ password: pwd.password })
+            });
             
-            {/* Password Health Score Section */}
-            <div className="health-score-section">
-                <h3>Password Health Score</h3>
-                <div className="score-bar">
-                    <div className="score-bar-inner" style={{ width: `${passwordHealthScore}%` }}></div>
-                </div>
-                <p>{passwordHealthScore} / 100</p>
-            </div>
+            if (!response.ok) {
+              if (response.status === 401) {
+                setError('Authentication required. Please log in.');
+                navigate('/login');
+                return;
+              }
+              throw new Error(`Error: ${response.status}`);
+            }
+            
+            const analysis = await response.json();
+            
+            analyzedPasswords.push({
+              ...pwd,
+              analysis
+            });
+          } catch (err) {
+            console.error(`Error analyzing password for ${pwd.service}:`, err);
+            // Add the password without analysis
+            analyzedPasswords.push({
+              ...pwd,
+              analysis: {
+                strength_score: 0,
+                strength_category: 'Unknown',
+                patterns: [],
+                attack_types: []
+              }
+            });
+          }
+        }
+        
+        setPasswords(analyzedPasswords);
+      } catch (err) {
+        console.error('Error analyzing passwords:', err);
+        setError('Failed to analyze passwords. Please try again.');
+      } finally {
+        setIsLoading(false);
+      }
+    };
+    
+    analyzePasswords();
+  }, [navigate]);
 
-            {/* Security Recommendations Section */}
-            <div className="security-recommendations">
-                <h3>Security Recommendations</h3>
-                <div className="critical-issues">
-                    <h4>Critical Issues</h4>
-                    <div className="issue">
-                        <p>Password reused on multiple sites</p>
-                        <button className="action-button">Change password</button>
-                    </div>
-                    <div className="issue">
-                        <p>Weak password detected</p>
-                        <button className="action-button">Strengthen now</button>
-                    </div>
-                </div>
+  const handleViewAnalysis = (password) => {
+    navigate('/vulnerability-analysis', { state: { password } });
+  };
 
-                <div className="warnings">
-                    <h4>Warnings</h4>
-                    <div className="issue">
-                        <p>Password hasn't been updated in a year</p>
-                        <button className="action-button">Update password</button>
-                    </div>
-                </div>
+  const getStrengthColor = (score) => {
+    if (score >= 80) return '#4CAF50'; // Green
+    if (score >= 60) return '#8BC34A'; // Light Green
+    if (score >= 40) return '#FFC107'; // Amber
+    if (score >= 20) return '#FF9800'; // Orange
+    return '#F44336'; // Red
+  };
 
-                <div className="good-practices">
-                    <h4>Good Practices</h4>
-                    <p>MFA enabled on critical accounts</p>
-                    <p>Password manager in use</p>
-                </div>
-            </div>
+  const getRiskLevelColor = (level) => {
+    if (level === 'High') return '#F44336'; // Red
+    if (level === 'Medium') return '#FF9800'; // Orange
+    return '#4CAF50'; // Green
+  };
 
-            {/* Data Breach Alerts Section */}
-            <div className="data-breach-alerts">
-                <h3>Data Breach Alerts</h3>
-                {dataBreachAlerts.map((alert, index) => (
-                    <div key={index} className="breach-alert">
-                        <p>{alert.name} - {alert.date}</p>
-                        <p>{alert.type}</p>
-                        <button className="action-button">View Details</button>
-                    </div>
-                ))}
-                <button className="action-button">Check All Accounts</button>
-            </div>
+  return (
+    <div className="dashboard-container">
+      <h1>Password Health Dashboard</h1>
+      
+      {error && <div className="error-message">{error}</div>}
+      
+      {isLoading ? (
+        <div className="loading-spinner">
+          <div className="spinner"></div>
+          <p>Analyzing passwords...</p>
         </div>
-    );
+      ) : (
+        <>
+          <div className="dashboard-summary">
+            <div className="summary-card">
+              <h3>Overall Health</h3>
+              <div className="health-score">
+                {passwords.length > 0 ? (
+                  <>
+                    <div className="score-circle" style={{ 
+                      background: `conic-gradient(${getStrengthColor(
+                        passwords.reduce((sum, pwd) => sum + (pwd.analysis?.strength_score || 0), 0) / passwords.length
+                      )} ${passwords.reduce((sum, pwd) => sum + (pwd.analysis?.strength_score || 0), 0) / passwords.length}%, #f0f0f0 0%)`
+                    }}>
+                      <div className="score-inner">
+                        {Math.round(passwords.reduce((sum, pwd) => sum + (pwd.analysis?.strength_score || 0), 0) / passwords.length)}
+                      </div>
+                    </div>
+                    <p>Average Strength</p>
+                  </>
+                ) : (
+                  <p>No passwords to analyze</p>
+                )}
+              </div>
+            </div>
+            
+            <div className="summary-card">
+              <h3>Critical Issues</h3>
+              <div className="issue-count">
+                {passwords.filter(pwd => pwd.analysis?.strength_score < 40).length}
+              </div>
+              <p>Weak Passwords</p>
+            </div>
+            
+            <div className="summary-card">
+              <h3>Warnings</h3>
+              <div className="warning-count">
+                {passwords.filter(pwd => pwd.analysis?.strength_score >= 40 && pwd.analysis?.strength_score < 60).length}
+              </div>
+              <p>Moderate Passwords</p>
+            </div>
+            
+            <div className="summary-card">
+              <h3>Secure</h3>
+              <div className="secure-count">
+                {passwords.filter(pwd => pwd.analysis?.strength_score >= 60).length}
+              </div>
+              <p>Strong Passwords</p>
+            </div>
+          </div>
+          
+          <div className="passwords-table-container">
+            <h2>Your Passwords</h2>
+            <table className="passwords-table">
+              <thead>
+                <tr>
+                  <th>Service</th>
+                  <th>Username</th>
+                  <th>Password</th>
+                  <th>Strength</th>
+                  <th>Last Changed</th>
+                  <th>Actions</th>
+                </tr>
+              </thead>
+              <tbody>
+                {passwords.map(pwd => (
+                  <tr key={pwd.id}>
+                    <td>{pwd.service}</td>
+                    <td>{pwd.username}</td>
+                    <td>
+                      <span className="password-mask">••••••••</span>
+                    </td>
+                    <td>
+                      <div className="strength-indicator">
+                        <div 
+                          className="strength-bar" 
+                          style={{ 
+                            width: `${pwd.analysis?.strength_score || 0}%`,
+                            backgroundColor: getStrengthColor(pwd.analysis?.strength_score || 0)
+                          }}
+                        ></div>
+                        <span>{pwd.analysis?.strength_category || 'Unknown'}</span>
+                      </div>
+                    </td>
+                    <td>{pwd.lastChanged}</td>
+                    <td>
+                      <button 
+                        className="view-analysis-btn"
+                        onClick={() => handleViewAnalysis(pwd.password)}
+                      >
+                        View Analysis
+                      </button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+          
+          <div className="recommendations-section">
+            <h2>Recommendations</h2>
+            <div className="recommendations-grid">
+              {passwords
+                .filter(pwd => pwd.analysis?.strength_score < 60)
+                .map(pwd => (
+                  <div key={pwd.id} className="recommendation-card">
+                    <h3>{pwd.service}</h3>
+                    <p>Current strength: <span style={{ color: getStrengthColor(pwd.analysis?.strength_score || 0) }}>
+                      {pwd.analysis?.strength_category || 'Unknown'}
+                    </span></p>
+                    {pwd.analysis?.suggestions && pwd.analysis.suggestions.length > 0 && (
+                      <ul className="suggestion-list">
+                        {pwd.analysis.suggestions.slice(0, 3).map((suggestion, index) => (
+                          <li key={index}>{suggestion}</li>
+                        ))}
+                      </ul>
+                    )}
+                    <button 
+                      className="improve-btn"
+                      onClick={() => handleViewAnalysis(pwd.password)}
+                    >
+                      Improve Password
+                    </button>
+                  </div>
+                ))}
+            </div>
+          </div>
+        </>
+      )}
+    </div>
+  );
 };
 
 export default PasswordHealthDashboard;
