@@ -1,0 +1,8 @@
+{
+  "dates": ["YYYY", "MMDD", "DDMM", "YYYYMMDD", "MM/DD", "DD/MM"],
+  "names": ["admin", "password", "qwerty", "123456", "welcome", "letmein", "monkey", "dragon", "master", "hello"],
+  "sequences": ["12345", "abcde", "qwerty", "asdfgh", "zxcvbn", "123123", "111111", "000000", "999999"],
+  "keyboard_patterns": ["qwerty", "asdfgh", "zxcvbn", "1qaz2wsx", "qwertyuiop", "asdfghjkl", "zxcvbnm", "qwerty123", "asdfgh123"],
+  "common_words": ["password", "admin", "welcome", "letmein", "monkey", "dragon", "master", "hello", "freedom", "whatever"],
+  "common_substitutions": ["p@ssw0rd", "adm1n", "w3lcome", "l3tm3in", "m0nk3y", "dr@gon", "m@ster", "h3ll0", "fr33dom", "wh@t3v3r"]
+} 
