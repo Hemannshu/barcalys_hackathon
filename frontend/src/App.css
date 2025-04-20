@@ -517,6 +517,28 @@ body {
   font-weight: bold;
 }
 
+.vulnerability-link {
+  margin-top: 2rem;
+  text-align: center;
+}
+
+.vulnerability-button {
+  background: none;
+  border: 2px solid #4a89dc;
+  color: #4a89dc;
+  padding: 1rem 2rem;
+  border-radius: 8px;
+  font-size: 1rem;
+  font-weight: bold;
+  cursor: pointer;
+  transition: all 0.3s;
+}
+
+.vulnerability-button:hover {
+  background-color: #4a89dc;
+  color: white;
+}
+
 @media (max-width: 768px) {
   .app {
     padding: 1rem;

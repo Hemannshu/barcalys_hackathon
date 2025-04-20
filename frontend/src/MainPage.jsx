@@ -2,6 +2,7 @@ import { useState, useCallback, useEffect, useMemo } from 'react';
 import './App.css';
 import AttackSimulator from './AttackSimulator';
 import logo from './images/image.png';
+import { useNavigate } from 'react-router-dom';
 
 const MainPage = ({ password, setPassword, showPassword, setShowPassword }) => {
   const [analysis, setAnalysis] = useState(null);
@@ -11,6 +12,7 @@ const MainPage = ({ password, setPassword, showPassword, setShowPassword }) => {
   const [crackTime, setCrackTime] = useState('');
   const [passwordSuggestions, setPasswordSuggestions] = useState([]);
   const [showSuggestions, setShowSuggestions] = useState(false);
+  const navigate = useNavigate();
 
   const calculateCharsetSize = (pwd) => {
     let size = 0;
@@ -526,29 +528,6 @@ const MainPage = ({ password, setPassword, showPassword, setShowPassword }) => {
               </div>
             )}
 
-            <div className="vulnerabilities-section">
-              <h3>Vulnerability Analysis</h3>
-              <div className="vulnerabilities-grid">
-                {analysis.vulnerabilities.map(vuln => (
-                  <div key={vuln.id} className={`vulnerability-card ${vuln.severity}`}>
-                    <div className="vulnerability-header">
-                      <h4>{vuln.name}</h4>
-                      <div className="risk-score">{vuln.riskScore}%</div>
-                    </div>
-                    <div className="vulnerability-body">
-                      <p>{vuln.description}</p>
-                      <div className="risk-meter">
-                        <div 
-                          className="risk-meter-fill" 
-                          style={{ width: `${vuln.riskScore}%` }}
-                        />
-                      </div>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </div>
-
             <div className="suggestions-section">
               <h3>Improvement Suggestions</h3>
               <ul className="suggestions-list">
@@ -559,6 +538,18 @@ const MainPage = ({ password, setPassword, showPassword, setShowPassword }) => {
                   </li>
                 ))}
               </ul>
+            </div>
+
+            <div className="vulnerability-link">
+              <button 
+                onClick={() => {
+                  console.log('Navigating to vulnerability analysis...');
+                  navigate('/vulnerability-analysis', { state: { password } });
+                }}
+                className="vulnerability-button"
+              >
+                View Detailed Vulnerability Analysis →
+              </button>
             </div>
           </div>
         )}
