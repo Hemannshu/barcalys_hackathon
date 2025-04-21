@@ -4,36 +4,29 @@ import './LoginPage.css';
 
 const LoginPage = () => {
   const navigate = useNavigate();
+  
   const [formData, setFormData] = useState({
     email: '',
-    password: '',
+    password: ''
   });
   const [error, setError] = useState('');
   const [isLoading, setIsLoading] = useState(false);
 
   const handleChange = (e) => {
     const { name, value } = e.target;
-    setFormData(prevState => ({
-      ...prevState,
-      [name]: value
-    }));
+    setFormData(prev => ({ ...prev, [name]: value }));
   };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    setError('');
     setIsLoading(true);
+    setError('');
 
     try {
       const response = await fetch('http://localhost:5000/api/auth/login', {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          email: formData.email,
-          password: formData.password,
-        }),
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(formData)
       });
 
       if (!response.ok) {
@@ -42,15 +35,14 @@ const LoginPage = () => {
       }
 
       const data = await response.json();
-      
-      // Store the token and user info
       localStorage.setItem('token', data.token);
-      localStorage.setItem('user', JSON.stringify(data.user));
+      localStorage.setItem('userId', data.user.id);
+      localStorage.setItem('email', formData.email);
       
-      // Navigate to dashboard
-      navigate('/dashboard');
+      // Redirect to face authentication page
+      window.location.href = '/face-auth.html?action=authenticate';
     } catch (err) {
-      setError(err.message || 'Invalid email or password');
+      setError(err.message);
     } finally {
       setIsLoading(false);
     }
@@ -61,7 +53,7 @@ const LoginPage = () => {
       <div className="login-container">
         <div className="login-header">
           <h2>Welcome Back</h2>
-          <p>Sign in to access your security dashboard</p>
+          <p>Please sign in to continue</p>
         </div>
 
         <form onSubmit={handleSubmit} className="login-form">
@@ -75,8 +67,8 @@ const LoginPage = () => {
               name="email"
               value={formData.email}
               onChange={handleChange}
-              placeholder="Enter your email"
               required
+              placeholder="Enter your email"
             />
           </div>
 
@@ -88,15 +80,16 @@ const LoginPage = () => {
               name="password"
               value={formData.password}
               onChange={handleChange}
-              placeholder="Enter your password"
               required
+              placeholder="Enter your password"
             />
           </div>
 
           <div className="form-options">
-            <label className="remember-me">
-              <input type="checkbox" /> Remember me
-            </label>
+            <div className="remember-me">
+              <input type="checkbox" id="remember" />
+              <label htmlFor="remember">Remember me</label>
+            </div>
             <Link to="/forgot-password" className="forgot-password">
               Forgot Password?
             </Link>
@@ -109,17 +102,14 @@ const LoginPage = () => {
           >
             {isLoading ? 'Signing in...' : 'Sign In'}
           </button>
-        </form>
 
-        <div className="signup-prompt">
-          Don't have an account?{' '}
-          <Link to="/signup" className="signup-link">
-            Sign up
-          </Link>
-        </div>
+          <p className="signup-link">
+            Don't have an account? <Link to="/signup">Sign up</Link>
+          </p>
+        </form>
       </div>
     </div>
   );
 };
 
-export default LoginPage; 
+export default LoginPage;
