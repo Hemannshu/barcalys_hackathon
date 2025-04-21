@@ -4,62 +4,57 @@ import './SignupPage.css';
 
 const SignupPage = () => {
   const navigate = useNavigate();
+  
   const [formData, setFormData] = useState({
     fullName: '',
     email: '',
     password: '',
-    confirmPassword: '',
+    confirmPassword: ''
   });
   const [error, setError] = useState('');
   const [isLoading, setIsLoading] = useState(false);
 
   const handleChange = (e) => {
     const { name, value } = e.target;
-    setFormData(prevState => ({
-      ...prevState,
-      [name]: value
-    }));
+    setFormData(prev => ({ ...prev, [name]: value }));
   };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
     setError('');
-    setIsLoading(true);
-
+    
     if (formData.password !== formData.confirmPassword) {
       setError('Passwords do not match');
       return;
     }
 
+    setIsLoading(true);
+
     try {
       const response = await fetch('http://localhost:5000/api/auth/signup', {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           full_name: formData.fullName,
           email: formData.email,
-          password: formData.password,
-        }),
+          password: formData.password
+        })
       });
 
       if (!response.ok) {
         const data = await response.json();
-        throw new Error(data.message || 'Signup failed');
+        throw new Error(data.message || 'Registration failed');
       }
 
       const data = await response.json();
-      
-      // Store the token and user info
       localStorage.setItem('token', data.token);
-      localStorage.setItem('user', JSON.stringify(data.user));
+      localStorage.setItem('userId', data.user.id);
+      localStorage.setItem('email', formData.email);
       
-      // Navigate to dashboard
-      navigate('/dashboard');
+      // Redirect to facial enrollment page
+      window.location.href = '/face-auth.html?action=enroll';
     } catch (err) {
-      setError(err.message || 'Failed to create account');
-    } finally {
+      setError(err.message);
       setIsLoading(false);
     }
   };
@@ -69,7 +64,7 @@ const SignupPage = () => {
       <div className="signup-container">
         <div className="signup-header">
           <h2>Create Account</h2>
-          <p>Join us to enhance your password security</p>
+          <p>Please fill in the details to get started</p>
         </div>
 
         <form onSubmit={handleSubmit} className="signup-form">
@@ -83,8 +78,8 @@ const SignupPage = () => {
               name="fullName"
               value={formData.fullName}
               onChange={handleChange}
-              placeholder="Enter your full name"
               required
+              placeholder="Enter your full name"
             />
           </div>
 
@@ -96,8 +91,8 @@ const SignupPage = () => {
               name="email"
               value={formData.email}
               onChange={handleChange}
-              placeholder="Enter your email"
               required
+              placeholder="Enter your email"
             />
           </div>
 
@@ -109,8 +104,9 @@ const SignupPage = () => {
               name="password"
               value={formData.password}
               onChange={handleChange}
-              placeholder="Create a password"
               required
+              placeholder="Create a password"
+              minLength="8"
             />
           </div>
 
@@ -122,20 +118,10 @@ const SignupPage = () => {
               name="confirmPassword"
               value={formData.confirmPassword}
               onChange={handleChange}
-              placeholder="Confirm your password"
               required
+              placeholder="Confirm your password"
+              minLength="8"
             />
-          </div>
-
-          <div className="terms-agreement">
-            <label className="checkbox-container">
-              <input type="checkbox" required />
-              <span className="checkmark"></span>
-              I agree to the{' '}
-              <Link to="/terms" className="terms-link">Terms of Service</Link>
-              {' '}and{' '}
-              <Link to="/privacy" className="privacy-link">Privacy Policy</Link>
-            </label>
           </div>
 
           <button 
@@ -145,17 +131,14 @@ const SignupPage = () => {
           >
             {isLoading ? 'Creating Account...' : 'Create Account'}
           </button>
-        </form>
 
-        <div className="login-prompt">
-          Already have an account?{' '}
-          <Link to="/login" className="login-link">
-            Sign in
-          </Link>
-        </div>
+          <p className="login-link">
+            Already have an account? <Link to="/login">Sign in</Link>
+          </p>
+        </form>
       </div>
     </div>
   );
 };
 
-export default SignupPage; 
+export default SignupPage;
