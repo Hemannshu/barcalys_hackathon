@@ -4,3 +4,5 @@ transformers==4.12.3
 python-dotenv==0.19.0
 PyJWT==2.8.0
 Werkzeug==2.3.7
+Flask-SQLAlchemy
+bcrypt
