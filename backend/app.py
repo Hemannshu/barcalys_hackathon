@@ -7,7 +7,7 @@ from functools import wraps
 from password_analyzer import PasswordAnalyzer
 
 app = Flask(__name__, static_folder='../frontend/build')
-CORS(app, resources={r"/api/*": {"origins": "http://localhost:3000"}})
+CORS(app, resources={r"/api/*": {"origins": "http://localhost:3001"}})
 
 # Configuration
 app.config['SECRET_KEY'] = 'your-secret-key'  # Change this to a secure secret key
