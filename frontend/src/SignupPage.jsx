@@ -1,10 +1,12 @@
 import React, { useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
+import { auth } from './firebase'; // Firebase Auth instance
+import { createUserWithEmailAndPassword, updateProfile } from 'firebase/auth'; // Modular functions
 import './SignupPage.css';
 
 const SignupPage = () => {
   const navigate = useNavigate();
-  
+
   const [formData, setFormData] = useState({
     fullName: '',
     email: '',
@@ -22,7 +24,7 @@ const SignupPage = () => {
   const handleSubmit = async (e) => {
     e.preventDefault();
     setError('');
-    
+
     if (formData.password !== formData.confirmPassword) {
       setError('Passwords do not match');
       return;
@@ -31,27 +33,25 @@ const SignupPage = () => {
     setIsLoading(true);
 
     try {
-      const response = await fetch('http://localhost:5000/api/auth/signup', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          full_name: formData.fullName,
-          email: formData.email,
-          password: formData.password
-        })
+      const userCredential = await createUserWithEmailAndPassword(
+        auth,
+        formData.email,
+        formData.password
+      );
+
+      const user = userCredential.user;
+
+      // Update user profile with full name
+      await updateProfile(user, {
+        displayName: formData.fullName
       });
 
-      if (!response.ok) {
-        const data = await response.json();
-        throw new Error(data.message || 'Registration failed');
-      }
-
-      const data = await response.json();
-      localStorage.setItem('token', data.token);
-      localStorage.setItem('userId', data.user.id);
+      // Store user data in localStorage
+      localStorage.setItem('token', user.refreshToken);
+      localStorage.setItem('userId', user.uid);
       localStorage.setItem('email', formData.email);
-      
-      // Redirect to facial enrollment page
+
+      // Redirect to face enrollment page
       window.location.href = '/face-auth.html?action=enroll';
     } catch (err) {
       setError(err.message);
@@ -69,7 +69,7 @@ const SignupPage = () => {
 
         <form onSubmit={handleSubmit} className="signup-form">
           {error && <div className="error-message">{error}</div>}
-          
+
           <div className="form-group">
             <label htmlFor="fullName">Full Name</label>
             <input
