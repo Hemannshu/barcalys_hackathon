@@ -13,6 +13,38 @@ const MainPage = ({ password, setPassword, showPassword, setShowPassword }) => {
   const [passwordSuggestions, setPasswordSuggestions] = useState([]);
   const [showSuggestions, setShowSuggestions] = useState(false);
   const navigate = useNavigate();
+  
+  useEffect(() => {
+    // Check if user has completed face authentication
+    const checkAuthStatus = async () => {
+      const token = localStorage.getItem('token');
+      const facialId = localStorage.getItem('facialId');
+      
+      if (!token) {
+        navigate('/login');
+        return;
+      }
+      
+      // If no facialId exists but user is logged in, redirect to appropriate face auth
+      if (!facialId) {
+        const response = await fetch('/api/auth/check-face-auth', {
+          headers: {
+            'Authorization': `Bearer ${token}`
+          }
+        });
+        
+        const data = await response.json();
+        if (data.hasFaceAuth) {
+          localStorage.setItem('facialId', data.facialId);
+        } else {
+          window.location.href = '/faceauth.html?action=enroll';
+        }
+      }
+    };
+    
+    checkAuthStatus();
+  }, [navigate]);
+
 
   const calculateCharsetSize = (pwd) => {
     let size = 0;

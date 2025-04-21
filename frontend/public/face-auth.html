@@ -1,0 +1,265 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Face Authentication</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, 'Open Sans', 'Helvetica Neue', sans-serif;
+        }
+
+        body {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .container {
+            background: rgba(255, 255, 255, 0.95);
+            padding: 2rem;
+            border-radius: 1rem;
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
+            text-align: center;
+            max-width: 90%;
+            width: 400px;
+        }
+
+        h1 {
+            color: #2d3748;
+            margin-bottom: 1rem;
+            font-size: 2rem;
+        }
+
+        #action-description {
+            color: #4a5568;
+            margin-bottom: 2rem;
+            line-height: 1.6;
+        }
+
+        button {
+            padding: 0.75rem 1.5rem;
+            font-size: 1rem;
+            border: none;
+            border-radius: 0.5rem;
+            background-color: #4c51bf;
+            color: white;
+            cursor: pointer;
+            transition: transform 0.2s, box-shadow 0.2s;
+            font-weight: 600;
+            margin: 1rem 0;
+        }
+
+        button:hover:not(:disabled) {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+        }
+
+        button:disabled {
+            background-color: #a0a0a0;
+            cursor: not-allowed;
+        }
+
+        #status {
+            margin-top: 1rem;
+            padding: 1rem;
+            border-radius: 0.5rem;
+            font-size: 0.9rem;
+        }
+
+        .success {
+            background-color: #d4edda;
+            color: #155724;
+            border: 1px solid #c3e6cb;
+        }
+
+        .error {
+            background-color: #f8d7da;
+            color: #721c24;
+            border: 1px solid #f5c6cb;
+        }
+
+        .warning {
+            background-color: #fff3cd;
+            color: #856404;
+            border: 1px solid #ffeeba;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1 id="action-title">Face Authentication</h1>
+        <div id="action-description"></div>
+        <button id="action-button" title="Perform face authentication">Continue</button>
+        <div id="status"></div>
+    </div>
+    <div id="faceio-modal"></div>
+    <script src="https://cdn.faceio.net/fio.js"></script>
+    <script type="text/javascript">
+        // Initialize faceIO with your application Public ID
+        const faceio = new faceIO("fioa6c50");
+        
+        // Get action and user data from URL/localStorage
+        const urlParams = new URLSearchParams(window.location.search);
+        const action = urlParams.get('action');
+        const userId = localStorage.getItem('userId');
+        const email = localStorage.getItem('email');
+        const token = localStorage.getItem('token');
+        
+        // Set UI based on action
+        const actionTitle = document.getElementById('action-title');
+        const actionDescription = document.getElementById('action-description');
+        const actionButton = document.getElementById('action-button');
+        const statusDiv = document.getElementById('status');
+        
+        if (action === 'enroll') {
+            actionTitle.textContent = 'Register Your Face';
+            actionDescription.textContent = 'Please register your facial biometrics for secure authentication.';
+            actionButton.textContent = 'Start Registration';
+        } else if (action === 'authenticate') {
+            actionTitle.textContent = 'Verify Your Identity';
+            actionDescription.textContent = 'Please authenticate using your registered facial biometrics.';
+            actionButton.textContent = 'Start Verification';
+        } else {
+            statusDiv.textContent = 'Invalid action specified';
+            statusDiv.className = 'error';
+            actionButton.style.display = 'none';
+        }
+        
+        // Handle button click
+        actionButton.addEventListener('click', function() {
+            if (action === 'enroll') {
+                enrollNewUser();
+            } else if (action === 'authenticate') {
+                authenticateUser();
+            }
+        });
+        
+        function enrollNewUser() {
+            actionButton.disabled = true;
+            faceio.enroll({
+                "locale": "auto",
+                "payload": {
+                    "userId": userId,
+                    "email": email
+                }
+            }).then(userInfo => {
+                // Update the user's facial ID in the backend
+                return fetch('http://localhost:5000/api/auth/update-facial-id', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${token}`
+                    },
+                    body: JSON.stringify({
+                        userId: userId,
+                        facialId: userInfo.facialId
+                    })
+                }).then(response => {
+                    if (!response.ok) {
+                        throw new Error('Failed to update facial ID');
+                    }
+                    return userInfo;
+                });
+            }).then(userInfo => {
+                statusDiv.innerHTML = `
+                    <div class="success">
+                        <h3>Registration Successful!</h3>
+                        <p>Your face has been registered successfully.</p>
+                        <p>Redirecting to dashboard...</p>
+                    </div>
+                `;
+                setTimeout(() => {
+                    window.location.href = '/dashboard';
+                }, 2000);
+            }).catch(errCode => {
+                actionButton.disabled = false;
+                handleError(errCode);
+            });
+        }
+        
+        function authenticateUser() {
+            actionButton.disabled = true;
+            faceio.authenticate({
+                "locale": "auto"
+            }).then(userData => {
+                // Verify the facial ID matches the user's record
+                return fetch('http://localhost:5000/api/auth/verify-facial-id', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${token}`
+                    },
+                    body: JSON.stringify({
+                        userId: userId,
+                        facialId: userData.facialId
+                    })
+                }).then(response => {
+                    if (!response.ok) {
+                        throw new Error('Face verification failed');
+                    }
+                    return userData;
+                });
+            }).then(userData => {
+                statusDiv.innerHTML = `
+                    <div class="success">
+                        <h3>Authentication Successful!</h3>
+                        <p>Welcome back! Redirecting to dashboard...</p>
+                    </div>
+                `;
+                setTimeout(() => {
+                    window.location.href = '/dashboard';
+                }, 2000);
+            }).catch(errCode => {
+                actionButton.disabled = false;
+                handleError(errCode);
+            });
+        }
+        
+        function handleError(errCode) {
+            let errorMessage = "An error occurred during the process.";
+            let errorClass = "error";
+            
+            switch (errCode.toString()) {
+                case "PERMISSION_REFUSED":
+                    errorMessage = "Camera access was denied. Please allow camera access and try again.";
+                    break;
+                case "NO_FACES_DETECTED":
+                    errorMessage = "No face detected. Please ensure your face is clearly visible.";
+                    errorClass = "warning";
+                    break;
+                case "UNRECOGNIZED_FACE":
+                    errorMessage = "Face not recognized. Please try again or register if you're a new user.";
+                    break;
+                case "FACE_DUPLICATION":
+                    errorMessage = "This face is already registered.";
+                    break;
+                case "FACE_MISMATCH":
+                    errorMessage = "Face verification failed. Please try again.";
+                    break;
+                case "SESSION_EXPIRED":
+                    errorMessage = "Session expired. Please refresh the page and try again.";
+                    break;
+                default:
+                    if (errCode.message) {
+                        errorMessage = errCode.message;
+                    } else {
+                        errorMessage = `Error: ${errCode}. Please try again.`;
+                    }
+            }
+            
+            statusDiv.innerHTML = `
+                <div class="${errorClass}">
+                    <h3>Error</h3>
+                    <p>${errorMessage}</p>
+                </div>
+            `;
+        }
+    </script>
+</body>
+</html> 
