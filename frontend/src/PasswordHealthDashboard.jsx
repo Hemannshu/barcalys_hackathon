@@ -37,7 +37,7 @@ const PasswordHealthDashboard = () => {
         
         for (const pwd of samplePasswords) {
           try {
-            const response = await fetch('http://localhost:5000/api/analyze', {
+            const response = await fetch('http://localhost:5000/api/analyze-password', {
               method: 'POST',
               headers: {
                 'Content-Type': 'application/json',
@@ -59,7 +59,12 @@ const PasswordHealthDashboard = () => {
             
             analyzedPasswords.push({
               ...pwd,
-              analysis
+              analysis: {
+                strength_score: analysis.score,
+                strength_category: analysis.strength,
+                suggestions: analysis.suggestions,
+                details: analysis.details
+              }
             });
           } catch (err) {
             console.error(`Error analyzing password for ${pwd.service}:`, err);

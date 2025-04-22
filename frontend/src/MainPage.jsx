@@ -4,6 +4,13 @@ import AttackSimulator from './AttackSimulator';
 import logo from './images/image.png';
 import { useNavigate } from 'react-router-dom';
 
+// Helper function to determine strength class based on score
+const getStrengthClass = (score) => {
+  if (score >= 8) return 'strong';
+  if (score >= 5) return 'medium';
+  return 'weak';
+};
+
 const MainPage = ({ password, setPassword, showPassword, setShowPassword }) => {
   const [analysis, setAnalysis] = useState(null);
   const [isLoading, setIsLoading] = useState(false);
@@ -12,6 +19,11 @@ const MainPage = ({ password, setPassword, showPassword, setShowPassword }) => {
   const [crackTime, setCrackTime] = useState('');
   const [passwordSuggestions, setPasswordSuggestions] = useState([]);
   const [showSuggestions, setShowSuggestions] = useState(false);
+  const [showMLAnalysis, setShowMLAnalysis] = useState(false);
+  const [mlAnalysis, setMLAnalysis] = useState(null);
+  const [isMLLoading, setIsMLLoading] = useState(false);
+  const [showMLModal, setShowMLModal] = useState(false);
+  const [mlResults, setMLResults] = useState(null);
   const navigate = useNavigate();
   
   useEffect(() => {
@@ -44,7 +56,6 @@ const MainPage = ({ password, setPassword, showPassword, setShowPassword }) => {
     
     checkAuthStatus();
   }, [navigate]);
-
 
   const calculateCharsetSize = (pwd) => {
     let size = 0;
@@ -358,23 +369,27 @@ const MainPage = ({ password, setPassword, showPassword, setShowPassword }) => {
     }
   }, []);
 
-  const generateFeedback = useCallback((pwd, metrics, breachCount) => {
+  const generateFeedback = useCallback((pwd, backendAnalysis, breachCount) => {
     const feedback = {
       main: "",
       suggestions: [],
-      vulnerabilities: metrics.vulnerabilities,
-      weaknesses: metrics.weaknesses
+      vulnerabilities: backendAnalysis.patterns || [],
+      weaknesses: backendAnalysis.attack_types || []
     };
 
-    if (metrics.strength === 0) feedback.main = "🚨 Extremely weak - crackable instantly";
-    else if (metrics.strength === 1) feedback.main = "⚠️ Weak - vulnerable to attacks";
-    else if (metrics.strength === 2) feedback.main = "🟡 Moderate - could be stronger";
+    // Map backend strength score to our categories
+    const strengthScore = backendAnalysis.strength_score;
+    if (strengthScore < 20) feedback.main = "🚨 Extremely weak - crackable instantly";
+    else if (strengthScore < 40) feedback.main = "⚠️ Weak - vulnerable to attacks";
+    else if (strengthScore < 60) feedback.main = "🟡 Moderate - could be stronger";
     else feedback.main = "✅ Strong password";
 
-    if (pwd.length < 12) feedback.suggestions.push("Use 12+ characters");
-    if (!/[A-Z]/.test(pwd)) feedback.suggestions.push("Add uppercase letters");
-    if (!/[0-9]/.test(pwd)) feedback.suggestions.push("Include numbers");
-    if (!/[^A-Za-z0-9]/.test(pwd)) feedback.suggestions.push("Add special characters");
+    // Add suggestions from backend
+    if (backendAnalysis.suggestions) {
+      feedback.suggestions = backendAnalysis.suggestions;
+    }
+
+    // Add breach information if found
     if (breachCount > 0) {
       feedback.main += ` (Found in ${breachCount} breaches)`;
       feedback.suggestions.unshift("Change this password immediately!");
@@ -397,14 +412,13 @@ const MainPage = ({ password, setPassword, showPassword, setShowPassword }) => {
     try {
       const metrics = calculatePasswordMetrics(password);
       const breachCount = await checkPasswordBreach(password);
-      const feedback = generateFeedback(password, metrics, breachCount);
 
       setAnalysis({
-        crackTime: metrics.crackTime,
         entropyScore: metrics.entropyScore,
+        crackTime: metrics.crackTime,
         breachCount,
-        feedback,
         isBreached: breachCount > 0,
+        feedback: generateFeedback(password, metrics, breachCount),
         vulnerabilities: metrics.vulnerabilities,
         weaknesses: metrics.weaknesses
       });
@@ -419,6 +433,89 @@ const MainPage = ({ password, setPassword, showPassword, setShowPassword }) => {
       setIsLoading(false);
     }
   }, [password, calculatePasswordMetrics, checkPasswordBreach, generateFeedback]);
+
+  const handleMLAnalysis = async () => {
+    if (!password) return;
+    
+    setIsMLLoading(true);
+    try {
+      const response = await fetch('http://localhost:5000/api/analyze-password', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${localStorage.getItem('token')}`
+        },
+        body: JSON.stringify({ password })
+      });
+
+      let data;
+      const text = await response.text();
+      
+      try {
+        data = JSON.parse(text);
+      } catch (e) {
+        console.error('Failed to parse response:', text);
+        throw new Error('Invalid response from server');
+      }
+
+      if (!response.ok) {
+        throw new Error(data.message || 'Failed to analyze password');
+      }
+      
+      if (data.error) {
+        throw new Error(data.message || 'Failed to analyze password');
+      }
+      
+      // Transform the data to match our UI expectations
+      const processedData = {
+        score: Math.round((data?.strength_score || 0) / 10), // Convert 0-100 to 0-10
+        category: data?.category || 'Unknown',
+        confidence: data?.confidence || 0,
+        details: {
+          length: data?.features?.length || 0,
+          entropy: data?.features?.entropy || 0,
+          characterTypes: {
+            uppercase: data?.features?.has_upper || false,
+            lowercase: data?.features?.has_lower || false,
+            numbers: data?.features?.has_digit || false,
+            symbols: data?.features?.has_special || false,
+            total: data?.features?.char_types || 0
+          }
+        },
+        crackTimes: data?.crack_times || {},
+        suggestions: data?.suggestions || []
+      };
+
+      console.log('Processed data:', processedData); // Debug log
+      setMLResults(processedData);
+      setShowMLModal(true);
+    } catch (error) {
+      console.error('ML Analysis error:', error);
+      setMLResults({
+        error: true,
+        message: error.message || 'Unable to analyze password. Please try again.',
+        score: 0,
+        category: 'Error',
+        confidence: 0,
+        details: {
+          length: password?.length || 0,
+          entropy: 0,
+          characterTypes: {
+            uppercase: false,
+            lowercase: false,
+            numbers: false,
+            symbols: false,
+            total: 0
+          }
+        },
+        crackTimes: {},
+        suggestions: [error.message || 'Unable to analyze password. Please try again.']
+      });
+      setShowMLModal(true);
+    } finally {
+      setIsMLLoading(false);
+    }
+  };
 
   return (
     <div className="app">
@@ -461,7 +558,7 @@ const MainPage = ({ password, setPassword, showPassword, setShowPassword }) => {
             disabled={isLoading}
             className={`analyze-btn ${isLoading ? 'loading' : ''}`}
           >
-            {isLoading ? 'Analyzing...' : 'Analyze Password'}
+            Analyze Password
           </button>
           
           <button
@@ -469,7 +566,15 @@ const MainPage = ({ password, setPassword, showPassword, setShowPassword }) => {
             className="fix-btn"
             disabled={!password}
           >
-            How to Fix
+            AI Fix
+          </button>
+
+          <button
+            onClick={handleMLAnalysis}
+            className="ml-analysis-btn"
+            disabled={!password || isMLLoading}
+          >
+            Advanced ML Analysis
           </button>
         </div>
 
@@ -537,13 +642,16 @@ const MainPage = ({ password, setPassword, showPassword, setShowPassword }) => {
               </div>
             </div>
 
-            <AttackSimulator 
-              password={password}
-              charsetSize={calculateCharsetSize(password)}
-              entropyScore={analysis.entropyScore}
-            />
+            <div className="attack-section">
+              <h3>Attack Simulation</h3>
+              <AttackSimulator 
+                password={password}
+                charsetSize={calculateCharsetSize(password)}
+                entropyScore={analysis.entropyScore}
+              />
+            </div>
 
-            {analysis.weaknesses.length > 0 && (
+            {analysis.weaknesses && analysis.weaknesses.length > 0 && (
               <div className="weakness-review">
                 <h3>Weakness Review</h3>
                 <div className="weakness-cards">
@@ -560,32 +668,376 @@ const MainPage = ({ password, setPassword, showPassword, setShowPassword }) => {
               </div>
             )}
 
-            <div className="suggestions-section">
-              <h3>Improvement Suggestions</h3>
-              <ul className="suggestions-list">
-                {analysis.feedback.suggestions.map((s, i) => (
-                  <li key={i}>
-                    <span className="suggestion-bullet">•</span>
-                    <span className="suggestion-text">{s}</span>
-                  </li>
-                ))}
-              </ul>
-            </div>
-
-            <div className="vulnerability-link">
-              <button 
-                onClick={() => {
-                  console.log('Navigating to vulnerability analysis...');
-                  navigate('/vulnerability-analysis', { state: { password } });
-                }}
-                className="vulnerability-button"
-              >
-                View Detailed Vulnerability Analysis →
-              </button>
-            </div>
+            {analysis.feedback && analysis.feedback.suggestions && (
+              <div className="suggestions-section">
+                <h3>Improvement Suggestions</h3>
+                <ul className="suggestions-list">
+                  {analysis.feedback.suggestions.map((suggestion, i) => (
+                    <li key={i}>
+                      <span className="suggestion-bullet">•</span>
+                      <span className="suggestion-text">{suggestion}</span>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
           </div>
         )}
       </div>
+
+      {showMLModal && mlResults && (
+        <div className="ml-modal-overlay">
+          <div className="ml-modal">
+            <button className="ml-modal-close" onClick={() => setShowMLModal(false)}>×</button>
+            <h2>Advanced ML Analysis Results</h2>
+            
+            <div className="ml-score-section">
+              <div className="ml-score">
+                <h3>Strength Score</h3>
+                <div className="score-value">{mlResults.score?.toFixed(1)}/10</div>
+                <div className="score-category">{mlResults.category}</div>
+                <div className="confidence">Confidence: {(mlResults.confidence * 100).toFixed(1)}%</div>
+              </div>
+            </div>
+
+            <div className="ml-details">
+              <h3>Password Features</h3>
+              <div className="feature-grid">
+                <div className="feature">
+                  <span>Length:</span>
+                  <span>{mlResults.details?.length || 0} characters</span>
+                </div>
+                <div className="feature">
+                  <span>Entropy:</span>
+                  <span>{(mlResults.details?.entropy || 0).toFixed(2)} bits</span>
+                </div>
+                <div className="feature">
+                  <span>Character Types:</span>
+                  <span>{mlResults.details?.characterTypes?.total || 0}/4</span>
+                </div>
+              </div>
+
+              <div className="char-types">
+                <h4>Character Sets Used:</h4>
+                <div className="char-type-grid">
+                  <div className={`char-type ${mlResults.details?.characterTypes?.uppercase ? 'active' : ''}`}>
+                    <span>ABC</span>
+                    <span>Uppercase</span>
+                  </div>
+                  <div className={`char-type ${mlResults.details?.characterTypes?.lowercase ? 'active' : ''}`}>
+                    <span>abc</span>
+                    <span>Lowercase</span>
+                  </div>
+                  <div className={`char-type ${mlResults.details?.characterTypes?.numbers ? 'active' : ''}`}>
+                    <span>123</span>
+                    <span>Numbers</span>
+                  </div>
+                  <div className={`char-type ${mlResults.details?.characterTypes?.symbols ? 'active' : ''}`}>
+                    <span>@#$</span>
+                    <span>Symbols</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {Object.keys(mlResults.crackTimes || {}).length > 0 && (
+              <div className="crack-times">
+                <h3>Estimated Crack Times</h3>
+                <div className="crack-times-grid">
+                  {Object.entries(mlResults.crackTimes).map(([method, data]) => (
+                    <div key={method} className="crack-time-card">
+                      <div className="attack-type">
+                        <span className="method">{method}</span>
+                        <span className="description">{data.description}</span>
+                      </div>
+                      <div className="time-estimate">
+                        <span className="time">{data.time_readable}</span>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {mlResults.suggestions?.length > 0 && (
+              <div className="ml-suggestions">
+                <h3>Improvement Suggestions</h3>
+                <ul>
+                  {mlResults.suggestions.map((suggestion, index) => (
+                    <li key={index}>{suggestion}</li>
+                  ))}
+                </ul>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      <style jsx>{`
+        .button-group {
+          display: grid;
+          grid-template-columns: 1fr 1fr;
+          gap: 10px;
+          margin: 20px 0;
+        }
+
+        .analyze-btn {
+          grid-column: 1 / -1;
+          background: #4a89dc;
+          color: white;
+          border: none;
+          padding: 15px;
+          border-radius: 8px;
+          font-size: 1rem;
+          cursor: pointer;
+          transition: background 0.3s;
+        }
+
+        .analyze-btn:hover {
+          background: #357abd;
+        }
+
+        .fix-btn, .ml-analysis-btn {
+          background: #6c757d;
+          color: white;
+          border: none;
+          padding: 15px;
+          border-radius: 8px;
+          font-size: 1rem;
+          cursor: pointer;
+          transition: background 0.3s;
+        }
+
+        .fix-btn:hover, .ml-analysis-btn:hover {
+          background: #5a6268;
+        }
+
+        .fix-btn:disabled, .ml-analysis-btn:disabled {
+          background: #cccccc;
+          cursor: not-allowed;
+        }
+
+        @media (max-width: 768px) {
+          .button-group {
+            grid-template-columns: 1fr;
+          }
+        }
+
+        .ml-analysis-btn {
+          background: #2c3e50;
+          color: white;
+          border: none;
+          padding: 10px 20px;
+          border-radius: 5px;
+          cursor: pointer;
+          margin-left: 10px;
+        }
+
+        .ml-analysis-btn:disabled {
+          background: #95a5a6;
+          cursor: not-allowed;
+        }
+
+        .ml-modal-overlay {
+          position: fixed;
+          top: 0;
+          left: 0;
+          right: 0;
+          bottom: 0;
+          background: rgba(0, 0, 0, 0.7);
+          display: flex;
+          justify-content: center;
+          align-items: center;
+          z-index: 1000;
+        }
+
+        .ml-modal {
+          background: white;
+          border-radius: 12px;
+          padding: 2rem;
+          max-width: 800px;
+          width: 90%;
+          max-height: 90vh;
+          overflow-y: auto;
+          position: relative;
+          box-shadow: 0 4px 20px rgba(0, 0, 0, 0.2);
+        }
+
+        .ml-modal-close {
+          position: absolute;
+          top: 1rem;
+          right: 1rem;
+          background: none;
+          border: none;
+          font-size: 1.5rem;
+          cursor: pointer;
+          color: #666;
+        }
+
+        .ml-score-section {
+          text-align: center;
+          margin: 2rem 0;
+          padding: 1.5rem;
+          background: #f8f9fa;
+          border-radius: 8px;
+        }
+
+        .score-value {
+          font-size: 3rem;
+          font-weight: bold;
+          color: #2c3e50;
+          margin: 0.5rem 0;
+        }
+
+        .score-category {
+          font-size: 1.2rem;
+          color: #4a89dc;
+          margin-bottom: 0.5rem;
+        }
+
+        .confidence {
+          color: #666;
+        }
+
+        .feature-grid {
+          display: grid;
+          grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+          gap: 1rem;
+          margin: 1rem 0;
+        }
+
+        .feature {
+          display: flex;
+          justify-content: space-between;
+          padding: 0.75rem;
+          background: #f8f9fa;
+          border-radius: 6px;
+        }
+
+        .char-types {
+          margin: 2rem 0;
+        }
+
+        .char-type-grid {
+          display: grid;
+          grid-template-columns: repeat(auto-fit, minmax(100px, 1fr));
+          gap: 1rem;
+          margin-top: 1rem;
+        }
+
+        .char-type {
+          display: flex;
+          flex-direction: column;
+          align-items: center;
+          padding: 1rem;
+          background: #f8f9fa;
+          border-radius: 6px;
+          opacity: 0.5;
+          transition: all 0.3s ease;
+        }
+
+        .char-type.active {
+          opacity: 1;
+          background: #e3f2fd;
+          color: #1976d2;
+        }
+
+        .crack-times {
+          margin: 2rem 0;
+          background: #f8f9fa;
+          border-radius: 12px;
+          padding: 1.5rem;
+        }
+
+        .crack-times h3 {
+          margin-bottom: 1.5rem;
+          color: #2c3e50;
+          font-size: 1.25rem;
+        }
+
+        .crack-times-grid {
+          display: grid;
+          gap: 1rem;
+        }
+
+        .crack-time-card {
+          background: white;
+          border-radius: 8px;
+          padding: 1.25rem;
+          display: flex;
+          justify-content: space-between;
+          align-items: center;
+          box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+          transition: transform 0.2s, box-shadow 0.2s;
+        }
+
+        .crack-time-card:hover {
+          transform: translateY(-2px);
+          box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+        }
+
+        .attack-type {
+          display: flex;
+          flex-direction: column;
+          gap: 0.5rem;
+        }
+
+        .method {
+          font-weight: 600;
+          color: #2c3e50;
+          font-size: 1.1rem;
+        }
+
+        .description {
+          color: #666;
+          font-size: 0.9rem;
+        }
+
+        .time-estimate {
+          text-align: right;
+          padding-left: 1rem;
+        }
+
+        .time {
+          font-weight: 500;
+          color: #1a73e8;
+          font-size: 1rem;
+          white-space: nowrap;
+        }
+
+        @media (max-width: 768px) {
+          .crack-time-card {
+            flex-direction: column;
+            text-align: center;
+            gap: 1rem;
+          }
+
+          .time-estimate {
+            text-align: center;
+            padding-left: 0;
+          }
+
+          .attack-type {
+            align-items: center;
+          }
+        }
+
+        .ml-suggestions {
+          margin: 2rem 0;
+        }
+
+        .ml-suggestions ul {
+          list-style-type: none;
+          padding: 0;
+        }
+
+        .ml-suggestions li {
+          margin: 0.5rem 0;
+          padding: 0.75rem;
+          background: #fff3e0;
+          border-radius: 6px;
+        }
+      `}</style>
     </div>
   );
 };

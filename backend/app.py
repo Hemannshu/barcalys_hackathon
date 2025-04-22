@@ -4,17 +4,34 @@ import os
 import jwt
 import datetime
 from functools import wraps
-from password_analyzer import PasswordAnalyzer
+from password_ml import MLPasswordAnalyzer
 
 app = Flask(__name__, static_folder='../frontend/build')
-CORS(app, resources={r"/api/*": {"origins": "http://localhost:3000"}})
+CORS(app, resources={
+    r"/*": {
+        "origins": "*",
+        "methods": ["GET", "POST", "OPTIONS"],
+        "allow_headers": ["Content-Type", "Authorization"]
+    }
+})
 
 # Configuration
-app.config['SECRET_KEY'] = 'your-secret-key'  # Change this to a secure secret key
+app.config['SECRET_KEY'] = 'your-secret-key'
 app.config['JWT_EXPIRATION_DELTA'] = datetime.timedelta(days=1)
 
-# Initialize password analyzer
-password_analyzer = PasswordAnalyzer()
+# Initialize password analyzer with trained model
+current_dir = os.path.dirname(os.path.abspath(__file__))
+model_path = os.path.join(current_dir, 'password_ml', 'models', 'password_strength_model.joblib')
+
+# Create models directory if it doesn't exist
+os.makedirs(os.path.dirname(model_path), exist_ok=True)
+
+try:
+    password_analyzer = MLPasswordAnalyzer(model_path=model_path)
+except Exception as e:
+    print(f"Error initializing password analyzer: {str(e)}")
+    # Initialize with default settings if model loading fails
+    password_analyzer = MLPasswordAnalyzer()
 
 # Mock user database (replace with actual database in production)
 users = {}
@@ -105,19 +122,61 @@ def login():
     })
 
 # Password analysis endpoint
-@app.route('/api/analyze', methods=['POST'])
-@token_required
-def analyze_password(current_user):
-    data = request.get_json()
-    password = data.get('password')
-    
-    if not password:
-        return jsonify({'error': 'Password is required'}), 400
-    
-    # Use our password analyzer to analyze the password
-    result = password_analyzer.analyze_password(password)
-    
-    return jsonify(result)
+@app.route('/api/analyze-password', methods=['POST'])
+def analyze_password():
+    try:
+        data = request.get_json()
+        if not data or 'password' not in data:
+            return jsonify({
+                'error': True,
+                'message': 'No password provided'
+            }), 400
+
+        password = data['password']
+        analysis = password_analyzer.analyze_password(password)
+
+        if not analysis:
+            return jsonify({
+                'error': True,
+                'message': 'Failed to analyze password'
+            }), 500
+
+        # Transform crack times into a more UI-friendly format
+        formatted_crack_times = {}
+        for method, time_data in analysis.get('crack_times', {}).items():
+            formatted_name = ' '.join(word.capitalize() for word in method.split('_'))
+            formatted_crack_times[formatted_name] = {
+                'time_readable': time_data.get('time_readable', 'unknown'),
+                'description': time_data.get('description', ''),
+                'seconds': time_data.get('seconds', 0)
+            }
+
+        # Transform analysis into expected format
+        response = {
+            'strength_score': analysis.get('strength_score', 0) * 10,  # Convert 0-10 to 0-100
+            'category': analysis.get('category', 'Unknown'),
+            'confidence': analysis.get('confidence', 0),
+            'features': {
+                'length': len(password),
+                'entropy': analysis.get('features', {}).get('entropy', 0),
+                'has_upper': analysis.get('features', {}).get('has_upper', False),
+                'has_lower': analysis.get('features', {}).get('has_lower', False),
+                'has_digit': analysis.get('features', {}).get('has_digit', False),
+                'has_special': analysis.get('features', {}).get('has_special', False),
+                'char_types': analysis.get('features', {}).get('char_types', 0)
+            },
+            'crack_times': formatted_crack_times,
+            'suggestions': analysis.get('suggestions', [])
+        }
+
+        return jsonify(response), 200
+
+    except Exception as e:
+        app.logger.error(f"Error analyzing password: {str(e)}")
+        return jsonify({
+            'error': True,
+            'message': f'Internal server error: {str(e)}'
+        }), 500
 
 if __name__ == '__main__':
-    app.run(debug=True)
+    app.run(host='0.0.0.0', port=5000, debug=True)
