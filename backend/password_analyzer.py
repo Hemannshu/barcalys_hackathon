@@ -72,38 +72,114 @@ class PasswordAnalyzer:
         entropy = len(password) * math.log2(pool_size)
         return entropy
     
-    def estimate_crack_time(self, password: str) -> Dict[str, Any]:
-        """Estimate the time to crack a password using different hash algorithms."""
-        results = {}
+    def estimate_crack_time(self, password: str) -> Dict[str, Dict[str, Any]]:
+        """Estimate time to crack password using various attack methods."""
+        # Calculate base metrics
+        length = len(password)
+        has_lower = bool(re.search(r'[a-z]', password))
+        has_upper = bool(re.search(r'[A-Z]', password))
+        has_digit = bool(re.search(r'\d', password))
+        has_special = bool(re.search(r'[^a-zA-Z0-9]', password))
         
-        for algo, ops_per_sec in self.hash_algorithms.items():
-            # Calculate number of possible combinations
-            # This is a simplification - in reality, attackers use optimized methods
-            entropy = self.calculate_entropy(password)
-            combinations = 2 ** entropy
-            
-            # Estimate time in seconds
-            seconds = combinations / ops_per_sec
-            
-            # Convert to human-readable format
-            if seconds < 60:
-                time_str = f"{seconds:.2f} seconds"
+        # Calculate character space
+        char_space = 0
+        if has_lower: char_space += 26
+        if has_upper: char_space += 26
+        if has_digit: char_space += 10
+        if has_special: char_space += 33  # Common special characters
+        
+        # Attack speeds (attempts per second)
+        BRUTE_FORCE_SPEED = 1_000_000_000  # 1 billion/sec (high-end GPU)
+        DICTIONARY_SPEED = 10_000_000      # 10 million/sec
+        PATTERN_SPEED = 100_000_000       # 100 million/sec
+        TARGETED_SPEED = 1_000            # 1000/sec
+        
+        def format_time(seconds: float) -> str:
+            """Format time in a human-readable way."""
+            if seconds < 0.000001:
+                return "instantly"
+            elif seconds < 0.001:
+                return f"{seconds*1000000:.1f} microseconds"
+            elif seconds < 1:
+                return f"{seconds*1000:.1f} milliseconds"
+            elif seconds < 60:
+                return f"{seconds:.1f} seconds"
             elif seconds < 3600:
-                time_str = f"{seconds/60:.2f} minutes"
+                return f"{seconds/60:.1f} minutes"
             elif seconds < 86400:
-                time_str = f"{seconds/3600:.2f} hours"
-            elif seconds < 31536000:
-                time_str = f"{seconds/86400:.2f} days"
+                return f"{seconds/3600:.1f} hours"
+            elif seconds < 2592000:  # 30 days
+                return f"{seconds/86400:.1f} days"
+            elif seconds < 31536000:  # 1 year
+                return f"{seconds/2592000:.1f} months"
+            elif seconds < 315360000:  # 10 years
+                return f"{seconds/31536000:.1f} years"
+            elif seconds < 3153600000:  # 100 years
+                return f"{seconds/31536000:.0f} years"
             else:
-                time_str = f"{seconds/31536000:.2f} years"
-            
-            results[algo] = {
-                "time_seconds": seconds,
-                "time_readable": time_str,
-                "entropy_bits": entropy
-            }
+                return "centuries"
         
-        return results
+        # Calculate brute force time
+        brute_combinations = char_space ** length
+        brute_seconds = brute_combinations / BRUTE_FORCE_SPEED
+        
+        # Calculate dictionary attack time
+        word_pattern = re.compile(r'[a-zA-Z]{3,}')
+        words = word_pattern.findall(password)
+        if words:
+            dict_combinations = 171476 * (2 if has_upper else 1) * (2 if has_digit else 1) * (2 if has_special else 1)
+            dict_seconds = dict_combinations / DICTIONARY_SPEED
+        else:
+            dict_seconds = float('inf')
+        
+        # Calculate pattern-based attack time
+        has_pattern = bool(re.search(r'(.)\\1{2,}|123|abc|qwerty|password|admin', password.lower()))
+        if has_pattern:
+            pattern_combinations = 1000000 * (2 if has_upper else 1) * (2 if has_digit else 1) * (2 if has_special else 1)
+            pattern_seconds = pattern_combinations / PATTERN_SPEED
+        else:
+            pattern_seconds = float('inf')
+        
+        # Calculate targeted attack time
+        has_date = bool(re.search(r'19\d{2}|20\d{2}|[0-9]{6,8}', password))
+        if has_date:
+            targeted_combinations = 100000 * (2 if has_upper else 1) * (2 if has_special else 1)
+            targeted_seconds = targeted_combinations / TARGETED_SPEED
+        else:
+            targeted_seconds = float('inf')
+        
+        # Calculate entropy contribution scores (0-100)
+        def calc_entropy_contribution(seconds: float) -> float:
+            if seconds == float('inf'):
+                return 0
+            return min(100, max(0, math.log2(seconds + 1) * 10))
+        
+        return {
+            "brute_force": {
+                "seconds": brute_seconds,
+                "time_readable": format_time(brute_seconds),
+                "entropy_contribution": calc_entropy_contribution(brute_seconds),
+                "description": "Tries every possible combination of characters"
+            },
+            "dictionary": {
+                "seconds": dict_seconds,
+                "time_readable": format_time(dict_seconds),
+                "entropy_contribution": calc_entropy_contribution(dict_seconds),
+                "description": "Uses common words and variations"
+            },
+            "pattern_based": {
+                "seconds": pattern_seconds,
+                "time_readable": format_time(pattern_seconds),
+                "entropy_contribution": calc_entropy_contribution(pattern_seconds),
+                "description": "Exploits common patterns and keyboard layouts"
+            },
+            "targeted": {
+                "seconds": targeted_seconds,
+                "time_readable": format_time(targeted_seconds),
+                "entropy_contribution": calc_entropy_contribution(targeted_seconds),
+                "description": "Uses personal information and common dates"
+            }
+        }
     
     def identify_patterns(self, password: str) -> List[Dict[str, Any]]:
         """Identify common patterns in the password."""
@@ -148,7 +224,7 @@ class PasswordAnalyzer:
         
         return patterns
     
-    def generate_suggestions(self, password: str) -> List[str]:
+    def generate_suggestions(self, password: str, patterns: List[Dict[str, Any]]) -> List[str]:
         """Generate suggestions to improve password strength."""
         suggestions = []
         
@@ -172,7 +248,6 @@ class PasswordAnalyzer:
             suggestions.append("Add special characters")
         
         # Check for common patterns
-        patterns = self.identify_patterns(password)
         if patterns:
             for pattern in patterns:
                 if pattern["severity"] == "high":
@@ -216,53 +291,53 @@ class PasswordAnalyzer:
         return stronger
     
     def analyze_password(self, password: str) -> Dict[str, Any]:
-        """Perform a comprehensive analysis of a password."""
+        """Perform comprehensive analysis of a password."""
+        # Get crack times for different methods
+        crack_times = self.estimate_crack_time(password)
+        
         # Calculate entropy
         entropy = self.calculate_entropy(password)
-        
-        # Estimate crack time
-        crack_times = self.estimate_crack_time(password)
         
         # Identify patterns
         patterns = self.identify_patterns(password)
         
         # Generate suggestions
-        suggestions = self.generate_suggestions(password)
+        suggestions = self.generate_suggestions(password, patterns)
+        
+        # Determine fastest crack method
+        fastest_crack = min(crack_times.items(), key=lambda x: x[1]["seconds"])
+        fastest_method = fastest_crack[0]
+        fastest_time = fastest_crack[1]
         
         # Calculate overall strength score (0-100)
-        strength_score = min(100, int(entropy * 5))
+        time_score = min(100, 20 * sum(ct["entropy_contribution"]/100 for ct in crack_times.values()))
+        pattern_penalty = len(patterns) * 10
+        final_score = max(0, min(100, time_score - pattern_penalty))
         
-        # Adjust score based on patterns
-        for pattern in patterns:
-            if pattern["severity"] == "high":
-                strength_score -= 20
-            elif pattern["severity"] == "medium":
-                strength_score -= 10
-        
-        # Ensure score is between 0 and 100
-        strength_score = max(0, min(100, strength_score))
-        
-        # Determine strength category
-        if strength_score >= 80:
-            strength_category = "Very Strong"
-        elif strength_score >= 60:
-            strength_category = "Strong"
-        elif strength_score >= 40:
-            strength_category = "Moderate"
-        elif strength_score >= 20:
-            strength_category = "Weak"
+        # Determine category
+        if final_score < 20:
+            category = "Very Weak"
+        elif final_score < 40:
+            category = "Weak"
+        elif final_score < 60:
+            category = "Moderate"
+        elif final_score < 80:
+            category = "Strong"
         else:
-            strength_category = "Very Weak"
+            category = "Very Strong"
         
         return {
-            "password": password,
-            "entropy_bits": entropy,
-            "strength_score": strength_score,
-            "strength_category": strength_category,
+            "category": category,
+            "score": final_score,
+            "entropy": entropy,
             "crack_times": crack_times,
             "patterns": patterns,
             "suggestions": suggestions,
-            "attack_types": self._determine_attack_types(password, patterns)
+            "fastest_crack": {
+                "method": fastest_method,
+                "time": fastest_time["time_readable"],
+                "description": fastest_time["description"]
+            }
         }
     
     def _determine_attack_types(self, password: str, patterns: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
