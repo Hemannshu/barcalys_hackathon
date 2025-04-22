@@ -3,6 +3,7 @@ import './App.css';
 import AttackSimulator from './AttackSimulator';
 import logo from './images/image.png';
 import { useNavigate } from 'react-router-dom';
+import Chatbot from './Chatbot';
 
 // Helper function to determine strength class based on score
 const getStrengthClass = (score) => {
@@ -24,6 +25,7 @@ const MainPage = ({ password, setPassword, showPassword, setShowPassword }) => {
   const [isMLLoading, setIsMLLoading] = useState(false);
   const [showMLModal, setShowMLModal] = useState(false);
   const [mlResults, setMLResults] = useState(null);
+  const [showChatbot, setShowChatbot] = useState(false);
   const navigate = useNavigate();
   
   useEffect(() => {
@@ -147,13 +149,7 @@ const MainPage = ({ password, setPassword, showPassword, setShowPassword }) => {
   };
 
   const handleGenerateSuggestions = () => {
-    const suggestions = generateStrongPasswords(password);
-    const suggestionsWithStrength = suggestions.map(pwd => ({
-      password: pwd,
-      strength: calculatePasswordStrength(pwd)
-    }));
-    setPasswordSuggestions(suggestionsWithStrength);
-    setShowSuggestions(true);
+    setShowChatbot(true);
   };
 
   const calculateAttackRiskScores = useCallback((pwd) => {
@@ -566,7 +562,7 @@ const MainPage = ({ password, setPassword, showPassword, setShowPassword }) => {
             className="fix-btn"
             disabled={!password}
           >
-            AI Fix
+            Fix It AI
           </button>
 
           <button
@@ -769,6 +765,26 @@ const MainPage = ({ password, setPassword, showPassword, setShowPassword }) => {
                 </ul>
               </div>
             )}
+          </div>
+        </div>
+      )}
+
+      {showChatbot && (
+        <div className="chatbot-modal">
+          <div className="chatbot-modal-content">
+            <button 
+              className="close-chatbot"
+              onClick={() => setShowChatbot(false)}
+            >
+              ×
+            </button>
+            <Chatbot 
+              password={password}
+              onPasswordSelect={(newPassword) => {
+                setPassword(newPassword);
+                setShowChatbot(false);
+              }}
+            />
           </div>
         </div>
       )}
@@ -1036,6 +1052,42 @@ const MainPage = ({ password, setPassword, showPassword, setShowPassword }) => {
           padding: 0.75rem;
           background: #fff3e0;
           border-radius: 6px;
+        }
+
+        .chatbot-modal {
+          position: fixed;
+          top: 0;
+          left: 0;
+          right: 0;
+          bottom: 0;
+          background: rgba(0, 0, 0, 0.7);
+          display: flex;
+          justify-content: center;
+          align-items: center;
+          z-index: 1000;
+        }
+
+        .chatbot-modal-content {
+          background: white;
+          border-radius: 12px;
+          padding: 2rem;
+          max-width: 800px;
+          width: 90%;
+          max-height: 90vh;
+          overflow-y: auto;
+          position: relative;
+          box-shadow: 0 4px 20px rgba(0, 0, 0, 0.2);
+        }
+
+        .close-chatbot {
+          position: absolute;
+          top: 1rem;
+          right: 1rem;
+          background: none;
+          border: none;
+          font-size: 1.5rem;
+          cursor: pointer;
+          color: #666;
         }
       `}</style>
     </div>
