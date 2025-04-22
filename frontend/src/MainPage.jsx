@@ -681,6 +681,12 @@ const MainPage = ({ password, setPassword, showPassword, setShowPassword }) => {
                 >
                   View Vulnerability Analysis
                 </button>
+                <button 
+                  className="vulnerability-analysis-btn"
+                  onClick={() => navigate('/vulnerability-analysis', { state: { password } })}
+                >
+                  View Vulnerability Analysis
+                </button>
               </div>
             )}
           </div>
@@ -1117,6 +1123,29 @@ const MainPage = ({ password, setPassword, showPassword, setShowPassword }) => {
           font-size: 1.5rem;
           cursor: pointer;
           color: #666;
+        }
+
+        .vulnerability-analysis-btn {
+          background: #2c3e50;
+          color: white;
+          border: none;
+          padding: 12px 20px;
+          border-radius: 8px;
+          font-size: 1rem;
+          cursor: pointer;
+          transition: all 0.3s;
+          margin-top: 15px;
+          width: 100%;
+          display: flex;
+          justify-content: center;
+          align-items: center;
+          gap: 8px;
+        }
+        
+        .vulnerability-analysis-btn:hover {
+          background: #34495e;
+          transform: translateY(-2px);
+          box-shadow: 0 4px 8px rgba(0,0,0,0.1);
         }
       `}</style>
     </div>
