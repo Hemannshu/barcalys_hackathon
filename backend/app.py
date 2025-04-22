@@ -5,6 +5,7 @@ import jwt
 import datetime
 from functools import wraps
 from password_ml import MLPasswordAnalyzer
+from hash_ml.hash_analyzer import HashVulnerabilityAnalyzer
 
 app = Flask(__name__, static_folder='../frontend/build')
 CORS(app, resources={
@@ -32,6 +33,9 @@ except Exception as e:
     print(f"Error initializing password analyzer: {str(e)}")
     # Initialize with default settings if model loading fails
     password_analyzer = MLPasswordAnalyzer()
+
+# Initialize hash analyzer
+hash_analyzer = HashVulnerabilityAnalyzer()
 
 # Mock user database (replace with actual database in production)
 users = {}
@@ -133,46 +137,106 @@ def analyze_password():
             }), 400
 
         password = data['password']
-        analysis = password_analyzer.analyze_password(password)
+        
+        # Initialize the standard password analyzer
+        from password_analyzer import PasswordAnalyzer
+        standard_analyzer = PasswordAnalyzer()
+        standard_analysis = standard_analyzer.analyze_password(password)
+        
+        # Get ML analysis if available
+        ml_analysis = password_analyzer.analyze_password(password)
 
-        if not analysis:
-            return jsonify({
-                'error': True,
-                'message': 'Failed to analyze password'
-            }), 500
-
-        # Transform crack times into a more UI-friendly format
-        formatted_crack_times = {}
-        for method, time_data in analysis.get('crack_times', {}).items():
-            formatted_name = ' '.join(word.capitalize() for word in method.split('_'))
-            formatted_crack_times[formatted_name] = {
-                'time_readable': time_data.get('time_readable', 'unknown'),
-                'description': time_data.get('description', ''),
-                'seconds': time_data.get('seconds', 0)
-            }
-
-        # Transform analysis into expected format
+        # Combine both analyses
         response = {
-            'strength_score': analysis.get('strength_score', 0) * 10,  # Convert 0-10 to 0-100
-            'category': analysis.get('category', 'Unknown'),
-            'confidence': analysis.get('confidence', 0),
+            'score': min(1.0, max(0.0, standard_analysis['score'] / 100.0)),  # Normalize score to 0-1 range
+            'category': standard_analysis['category'],
+            'entropy': standard_analysis['entropy'],
+            'patterns': standard_analysis['patterns'],
+            'suggestions': standard_analysis['suggestions'],
             'features': {
                 'length': len(password),
-                'entropy': analysis.get('features', {}).get('entropy', 0),
-                'has_upper': analysis.get('features', {}).get('has_upper', False),
-                'has_lower': analysis.get('features', {}).get('has_lower', False),
-                'has_digit': analysis.get('features', {}).get('has_digit', False),
-                'has_special': analysis.get('features', {}).get('has_special', False),
-                'char_types': analysis.get('features', {}).get('char_types', 0)
-            },
-            'crack_times': formatted_crack_times,
-            'suggestions': analysis.get('suggestions', [])
+                'entropy': standard_analysis['entropy'],
+                'has_upper': any(c.isupper() for c in password),
+                'has_lower': any(c.islower() for c in password),
+                'has_digit': any(c.isdigit() for c in password),
+                'has_special': any(not c.isalnum() for c in password),
+                'char_types': (
+                    (1 if any(c.isupper() for c in password) else 0) +
+                    (1 if any(c.islower() for c in password) else 0) +
+                    (1 if any(c.isdigit() for c in password) else 0) +
+                    (1 if any(not c.isalnum() for c in password) else 0)
+                )
+            }
         }
 
+        # Process crack times to handle Infinity values
+        crack_times = standard_analysis.get('crack_times', {})
+        processed_crack_times = {}
+        
+        for method, data in crack_times.items():
+            if not isinstance(data, dict):
+                continue
+                
+            processed_data = data.copy()
+            if 'seconds' in processed_data:
+                if processed_data['seconds'] == float('inf'):
+                    processed_data['seconds'] = 1e100  # Use a very large number instead of Infinity
+                    processed_data['time_readable'] = 'centuries'
+                elif processed_data['seconds'] == float('-inf'):
+                    processed_data['seconds'] = 0
+                    processed_data['time_readable'] = 'instant'
+            
+            processed_crack_times[method] = processed_data
+        
+        response['crack_times'] = processed_crack_times
+
+        # Add ML confidence if available
+        if ml_analysis and isinstance(ml_analysis, dict):
+            response['confidence'] = ml_analysis.get('confidence', 0.7)  # Default to 0.7 if not available
+            app.logger.info(f"ML confidence: {response['confidence']}")  # Add debug logging
+
+        app.logger.info(f"Final response: {response}")  # Add debug logging
         return jsonify(response), 200
 
     except Exception as e:
         app.logger.error(f"Error analyzing password: {str(e)}")
+        return jsonify({
+            'error': True,
+            'message': f'Internal server error: {str(e)}'
+        }), 500
+
+@app.route('/api/analyze-hash', methods=['POST'])
+@token_required
+def analyze_hash(current_user):
+    """Analyze a cryptographic hash for vulnerabilities."""
+    try:
+        data = request.get_json()
+        if not data or 'hash' not in data or 'algorithm' not in data:
+            return jsonify({
+                'error': True,
+                'message': 'Missing hash value or algorithm'
+            }), 400
+
+        hash_value = data['hash']
+        algorithm = data['algorithm'].lower()
+
+        # Validate hash format
+        if not all(c in '0123456789abcdefABCDEF' for c in hash_value):
+            return jsonify({
+                'error': True,
+                'message': 'Invalid hash format - must be hexadecimal'
+            }), 400
+
+        # Analyze hash
+        analysis = hash_analyzer.analyze_hash(hash_value, algorithm)
+        
+        if 'error' in analysis:
+            return jsonify(analysis), 500
+
+        return jsonify(analysis), 200
+
+    except Exception as e:
+        app.logger.error(f"Error analyzing hash: {str(e)}")
         return jsonify({
             'error': True,
             'message': f'Internal server error: {str(e)}'
