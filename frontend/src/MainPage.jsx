@@ -1,9 +1,11 @@
 import { useState, useCallback, useEffect, useMemo } from 'react';
 import './App.css';
+import './MainPage.css';
 import AttackSimulator from './AttackSimulator';
 import logo from './images/image.png';
 import { useNavigate } from 'react-router-dom';
 import Chatbot from './Chatbot';
+import Mainpage from './MainPage.css';
 
 // Helper function to determine strength class based on score
 const getStrengthClass = (score) => {
@@ -375,6 +377,43 @@ const MainPage = ({ password, setPassword, showPassword, setShowPassword }) => {
       weaknesses: generateWeaknessReview(pwd)
     };
   }, [calculateVulnerabilities, generateWeaknessReview]);
+
+  const generatePasswordFromSuggestion = (currentPassword, suggestion) => {
+    if (!currentPassword) return '';
+    
+    let newPassword = currentPassword;
+    
+    if (suggestion.includes('length')) {
+      // Add random characters to increase length
+      const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789!@#$%^&*';
+      const randomLength = Math.floor(Math.random() * 4) + 2; // Add 2-5 random characters
+      for (let i = 0; i < randomLength; i++) {
+        newPassword += chars.charAt(Math.floor(Math.random() * chars.length));
+      }
+    } else if (suggestion.includes('uppercase')) {
+      // Convert some lowercase letters to uppercase
+      newPassword = newPassword.replace(/[a-z]/g, (char, index) => 
+        Math.random() > 0.5 ? char.toUpperCase() : char
+      );
+    } else if (suggestion.includes('lowercase')) {
+      // Convert some uppercase letters to lowercase
+      newPassword = newPassword.replace(/[A-Z]/g, (char, index) => 
+        Math.random() > 0.5 ? char.toLowerCase() : char
+      );
+    } else if (suggestion.includes('number')) {
+      // Add a random number
+      newPassword += Math.floor(Math.random() * 10);
+    } else if (suggestion.includes('special')) {
+      // Add a random special character
+      const specialChars = '!@#$%^&*';
+      newPassword += specialChars.charAt(Math.floor(Math.random() * specialChars.length));
+    } else if (suggestion.includes('pattern')) {
+      // Reverse the password to break patterns
+      newPassword = newPassword.split('').reverse().join('');
+    }
+    
+    return newPassword;
+  };
 
   useEffect(() => {
     const metrics = calculatePasswordMetrics(password);
@@ -750,39 +789,263 @@ const MainPage = ({ password, setPassword, showPassword, setShowPassword }) => {
             </div>
 
             {analysis.weaknesses && analysis.weaknesses.length > 0 && (
-              <div className="weakness-review">
-                <h3>Weakness Review</h3>
-                <div className="weakness-cards">
-                  {analysis.weaknesses.map((weakness, index) => (
-                    <div key={index} className={`weakness-card ${weakness.severity}`}>
-                      <div className="weakness-header">
-                        <h4>{weakness.title}</h4>
-                        <div className="weakness-severity">{weakness.severity}</div>
-                      </div>
-                      <p className="weakness-description">{weakness.description}</p>
-                    </div>
-                  ))}
-                </div>
-              </div>
+             <div className="char-composition-section">
+             <h2>Character Composition</h2>
+             <div className="char-types-grid">
+               <div className={`char-type ${/[A-Z]/.test(password) ? 'present' : ''}`}>
+                 <span className="char-type-label">ABC</span>
+                 <span className="char-type-status">{/[A-Z]/.test(password) ? '✓' : '×'}</span>
+                 <span className="char-type-count">
+                   {(password.match(/[A-Z]/g) || []).length} uppercase
+                 </span>
+               </div>
+               <div className={`char-type ${/[a-z]/.test(password) ? 'present' : ''}`}>
+                 <span className="char-type-label">abc</span>
+                 <span className="char-type-status">{/[a-z]/.test(password) ? '✓' : '×'}</span>
+                 <span className="char-type-count">
+                   {(password.match(/[a-z]/g) || []).length} lowercase
+                 </span>
+               </div>
+               <div className={`char-type ${/[0-9]/.test(password) ? 'present' : ''}`}>
+                 <span className="char-type-label">123</span>
+                 <span className="char-type-status">{/[0-9]/.test(password) ? '✓' : '×'}</span>
+                 <span className="char-type-count">
+                   {(password.match(/[0-9]/g) || []).length} numbers
+                 </span>
+               </div>
+               <div className={`char-type ${/[^A-Za-z0-9]/.test(password) ? 'present' : ''}`}>
+                 <span className="char-type-label">#@!</span>
+                 <span className="char-type-status">{/[^A-Za-z0-9]/.test(password) ? '✓' : '×'}</span>
+                 <span className="char-type-count">
+                   {(password.match(/[^A-Za-z0-9]/g) || []).length} special
+                 </span>
+               </div>
+             </div>
+             <div className="composition-summary">
+               <div className="summary-item">
+                 <span>Total Length:   </span>
+                 <span>{password.length} characters</span>
+               </div>
+               <div className="summary-item">
+                 <span>Character Types Used:    </span>
+                 <span>{[
+                   /[A-Z]/.test(password),
+                   /[a-z]/.test(password),
+                   /[0-9]/.test(password),
+                   /[^A-Za-z0-9]/.test(password)
+                 ].filter(Boolean).length} of 4</span>
+               </div>
+               {/(.)\1{2,}/.test(password) && (
+                 <div className="summary-item warning">
+                   <span>Warning:</span>
+                   <span>Contains repeating characters</span>
+                 </div>
+               )}
+             </div>
+           </div>
             )}
+
+            {/* Enhanced Patterns Section */}
+            <div className="patterns-section">
+              <h2>Pattern Analysis</h2>
+              <div className="patterns-grid">
+                {[
+                  {
+                    type: 'Repeating Characters',
+                    pattern: /(.)\1{2,}/.test(password) ? 'Found repeating characters' : 'No repeating characters',
+                    severity: /(.)\1{2,}/.test(password) ? 'high' : 'low',
+                    icon: '🔄'
+                  },
+                  {
+                    type: 'Sequential Patterns',
+                    pattern: (() => {
+                      const patterns = [
+                        /123|234|345|456|567|678|789/, // Numbers
+                        /abc|bcd|cde|def|efg|fgh|ghi|hij|ijk|jkl|klm|lmn|mno|nop|opq|pqr|qrs|rst|stu|tuv|uvw|vwx|wxy|xyz/, // Letters
+                        /321|432|543|654|765|876|987/, // Reverse numbers
+                        /cba|dcb|edc|fed|gfe|hgf|ihg|jih|kji|lkj|mlk|nml|onm|pon|qpo|rqp|srq|tsr|uts|vut|wvu|xwv|yxw|zyx/, // Reverse letters
+                        /qwerty|asdfgh|zxcvbn|1qaz2wsx|3edc4rfv|5tgb6yhn|7ujm8ik,|9ol.0p;/, // Keyboard patterns
+                        /!@#$%^&*()_+|QWERTYUIOP{}|ASDFGHJKL:"|ZXCVBNM<>?/ // Shifted keyboard patterns
+                      ];
+                      const found = patterns.some(p => p.test(password.toLowerCase()));
+                      return found ? 'Found sequential patterns' : 'No sequential patterns';
+                    })(),
+                    severity: (() => {
+                      const patterns = [
+                        /123|234|345|456|567|678|789/,
+                        /abc|bcd|cde|def|efg|fgh|ghi|hij|ijk|jkl|klm|lmn|mno|nop|opq|pqr|qrs|rst|stu|tuv|uvw|vwx|wxy|xyz/,
+                        /321|432|543|654|765|876|987/,
+                        /cba|dcb|edc|fed|gfe|hgf|ihg|jih|kji|lkj|mlk|nml|onm|pon|qpo|rqp|srq|tsr|uts|vut|wvu|xwv|yxw|zyx/,
+                        /qwerty|asdfgh|zxcvbn|1qaz2wsx|3edc4rfv|5tgb6yhn|7ujm8ik,|9ol.0p;/,
+                        /!@#$%^&*()_+|QWERTYUIOP{}|ASDFGHJKL:"|ZXCVBNM<>?/
+                      ];
+                      return patterns.some(p => p.test(password.toLowerCase())) ? 'high' : 'low';
+                    })(),
+                    icon: '🔢'
+                  },
+                  {
+                    type: 'Common Words & Phrases',
+                    pattern: (() => {
+                      const commonPatterns = [
+                        /password|admin|welcome|letmein|qwerty|123456|iloveyou|princess|rockyou|abc123|monkey|football|baseball|welcome1|master|hello|freedom|whatever|qazwsx|trustno1|dragon|passw0rd|superman|starwars|letmein1|shadow|monkey1|charlie|donald|mustang|hockey|ranger|jordan|harley|batman|startrek|merlin|ginger|nicole|matthew|access|yankees|joshua|lakers|dallas|packers|hello1|george|thunder|taylor|matrix|minecraft|pokemon|starwars|superman|batman|spiderman|harrypotter|gameofthrones|breakingbad|friends|simpsons|familyguy|southpark|rickandmorty|strangerthings|thewalkingdead|gameofthrones|breakingbad|friends|simpsons|familyguy|southpark|rickandmorty|strangerthings|thewalkingdead/i,
+                        /^[a-z]+[0-9]+$/, // word followed by numbers
+                        /^[0-9]+[a-z]+$/, // numbers followed by word
+                        /^[a-z]+[!@#$%^&*]+$/, // word followed by special chars
+                        /^[!@#$%^&*]+[a-z]+$/ // special chars followed by word
+                      ];
+                      const found = commonPatterns.some(p => p.test(password.toLowerCase()));
+                      return found ? 'Found common words/phrases' : 'No common words/phrases';
+                    })(),
+                    severity: (() => {
+                      const commonPatterns = [
+                        /password|admin|welcome|letmein|qwerty|123456|iloveyou|princess|rockyou|abc123|monkey|football|baseball|welcome1|master|hello|freedom|whatever|qazwsx|trustno1|dragon|passw0rd|superman|starwars|letmein1|shadow|monkey1|charlie|donald|mustang|hockey|ranger|jordan|harley|batman|startrek|merlin|ginger|nicole|matthew|access|yankees|joshua|lakers|dallas|packers|hello1|george|thunder|taylor|matrix|minecraft|pokemon|starwars|superman|batman|spiderman|harrypotter|gameofthrones|breakingbad|friends|simpsons|familyguy|southpark|rickandmorty|strangerthings|thewalkingdead|gameofthrones|breakingbad|friends|simpsons|familyguy|southpark|rickandmorty|strangerthings|thewalkingdead/i,
+                        /^[a-z]+[0-9]+$/,
+                        /^[0-9]+[a-z]+$/,
+                        /^[a-z]+[!@#$%^&*]+$/,
+                        /^[!@#$%^&*]+[a-z]+$/
+                      ];
+                      return commonPatterns.some(p => p.test(password.toLowerCase())) ? 'critical' : 'low';
+                    })(),
+                    icon: '📖'
+                  },
+                  {
+                    type: 'Personal Info',
+                    pattern: (() => {
+                      const personalPatterns = [
+                        /barclays|user|name|birthday|birth|date|year|month|day|phone|mobile|address|city|state|country|zip|postal|code|id|number|account|bank|card|credit|debit|ssn|social|security|driver|license|passport|visa|mastercard|amex|discover|paypal|venmo|cashapp|zelle|chase|wellsfargo|bankofamerica|citibank|usbank|pnc|tdbank|capitalone|ally|synchrony|barclaycard|americanexpress|visa|mastercard|discover|amex/i,
+                        /(19|20)\d{2}/, // Years 1900-2099
+                        /(0[1-9]|1[0-2])(0[1-9]|[12]\d|3[01])/, // MM/DD or DD/MM
+                        /(0[1-9]|1[0-2])\/(0[1-9]|[12]\d|3[01])\/(19|20)\d{2}/, // MM/DD/YYYY
+                        /(0[1-9]|[12]\d|3[01])\/(0[1-9]|1[0-2])\/(19|20)\d{2}/ // DD/MM/YYYY
+                      ];
+                      const found = personalPatterns.some(p => p.test(password.toLowerCase()));
+                      return found ? 'Found personal information' : 'No personal information';
+                    })(),
+                    severity: (() => {
+                      const personalPatterns = [
+                        /barclays|user|name|birthday|birth|date|year|month|day|phone|mobile|address|city|state|country|zip|postal|code|id|number|account|bank|card|credit|debit|ssn|social|security|driver|license|passport|visa|mastercard|amex|discover|paypal|venmo|cashapp|zelle|chase|wellsfargo|bankofamerica|citibank|usbank|pnc|tdbank|capitalone|ally|synchrony|barclaycard|americanexpress|visa|mastercard|discover|amex/i,
+                        /(19|20)\d{2}/,
+                        /(0[1-9]|1[0-2])(0[1-9]|[12]\d|3[01])/,
+                        /(0[1-9]|1[0-2])\/(0[1-9]|[12]\d|3[01])\/(19|20)\d{2}/,
+                        /(0[1-9]|[12]\d|3[01])\/(0[1-9]|1[0-2])\/(19|20)\d{2}/
+                      ];
+                      return personalPatterns.some(p => p.test(password.toLowerCase())) ? 'high' : 'low';
+                    })(),
+                    icon: '👤'
+                  },
+                  {
+                    type: 'Character Distribution',
+                    pattern: password.length > 0 ? 
+                      `Characters: ${password.length}, Unique: ${new Set(password).size}` : 
+                      'No characters',
+                    severity: password.length > 0 && new Set(password).size === password.length ? 'low' : 'medium',
+                    icon: '📊'
+                  },
+                  {
+                    type: 'Common Substitutions',
+                    pattern: (() => {
+                      const substitutions = [
+                        /[a@4]/g,
+                        /[e3]/g,
+                        /[i1!]/g,
+                        /[o0]/g,
+                        /[s5$]/g,
+                        /[t7]/g,
+                        /[b8]/g,
+                        /[g9]/g
+                      ];
+                      const normalized = substitutions.reduce((str, sub) => 
+                        str.replace(sub, sub.source[1]), password.toLowerCase());
+                      const found = normalized !== password.toLowerCase();
+                      return found ? 'Found common character substitutions' : 'No common substitutions';
+                    })(),
+                    severity: (() => {
+                      const substitutions = [
+                        /[a@4]/g,
+                        /[e3]/g,
+                        /[i1!]/g,
+                        /[o0]/g,
+                        /[s5$]/g,
+                        /[t7]/g,
+                        /[b8]/g,
+                        /[g9]/g
+                      ];
+                      const normalized = substitutions.reduce((str, sub) => 
+                        str.replace(sub, sub.source[1]), password.toLowerCase());
+                      return normalized !== password.toLowerCase() ? 'medium' : 'low';
+                    })(),
+                    icon: '🔄'
+                  }
+                ].map((pattern, index) => (
+                  <div key={index} className="pattern-card">
+                    <div className="pattern-icon">{pattern.icon}</div>
+                    <div className="pattern-content">
+                      <h3>{pattern.type}</h3>
+                      <p className="pattern-value">{pattern.pattern}</p>
+                      <div className={`severity-indicator ${pattern.severity}`}>
+                        <div className="severity-dot"></div>
+                        <span className="severity-text">{pattern.severity}</span>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
 
             {analysis.feedback && analysis.feedback.suggestions && (
               <div className="suggestions-section">
                 <h3>Improvement Suggestions</h3>
-                <ul className="suggestions-list">
+                <div className="suggestions-grid">
                   {analysis.feedback.suggestions.map((suggestion, i) => (
-                    <li key={i}>
-                      <span className="suggestion-bullet">•</span>
-                      <span className="suggestion-text">{suggestion}</span>
-                    </li>
+                    <div key={i} className="suggestion-card">
+                      <div className="suggestion-icon">
+                        {suggestion.includes("length") ? "📏" :
+                         suggestion.includes("uppercase") ? "🔠" :
+                         suggestion.includes("lowercase") ? "🔡" :
+                         suggestion.includes("number") ? "🔢" :
+                         suggestion.includes("special") ? "🔣" :
+                         suggestion.includes("pattern") ? "🔄" :
+                         "💡"}
+                      </div>
+                      <div className="suggestion-content">
+                        <p className="suggestion-text">{suggestion}</p>
+                        <div className="suggestion-impact">
+                          <span className="impact-label">Impact:</span>
+                          <div className="impact-meter">
+                            <div 
+                              className="impact-fill"
+                              style={{
+                                width: `${suggestion.includes("length") ? "90%" :
+                                        suggestion.includes("pattern") ? "85%" :
+                                        suggestion.includes("special") ? "80%" :
+                                        suggestion.includes("uppercase") ? "70%" :
+                                        suggestion.includes("lowercase") ? "60%" :
+                                        suggestion.includes("number") ? "50%" :
+                                        "40%"}`
+                              }}
+                            />
+                          </div>
+                        </div>
+                      </div>
+                      <button 
+                        className="apply-suggestion-btn"
+                        onClick={() => {
+                          const newPassword = generatePasswordFromSuggestion(password, suggestion);
+                          setPassword(newPassword);
+                          analyzePassword();
+                        }}
+                      >
+                        Try This
+                      </button>
+                    </div>
                   ))}
-                </ul>
+                </div>
                 <button 
                   className="vulnerability-analysis-btn"
                   onClick={() => {
                     const analysisData = {
                       password,
-                      score: analysis.entropyScore / 100, // Convert to 0-1 scale
+                      score: analysis.entropyScore / 100,
                       category: analysis.feedback?.strengthCategory || 'Unknown',
                       confidence: 0.95,
                       features: {
@@ -809,7 +1072,7 @@ const MainPage = ({ password, setPassword, showPassword, setShowPassword }) => {
                     });
                   }}
                 >
-                  View Vulnerability Analysis
+                  🛡️ View Vulnerability Analysis
                 </button>
               </div>
             )}
@@ -915,354 +1178,6 @@ const MainPage = ({ password, setPassword, showPassword, setShowPassword }) => {
           </div>
         </div>
       )}
-
-      <style jsx>{`
-        .button-group {
-          display: grid;
-          grid-template-columns: 1fr 1fr;
-          gap: 10px;
-          margin: 20px 0;
-        }
-
-        .analyze-btn {
-          grid-column: 1 / -1;
-          background: #4a89dc;
-          color: white;
-          border: none;
-          padding: 15px;
-          border-radius: 8px;
-          font-size: 1rem;
-          cursor: pointer;
-          transition: background 0.3s;
-        }
-
-        .analyze-btn:hover {
-          background: #357abd;
-        }
-
-        .fix-btn, .ml-analysis-btn {
-          background: #6c757d;
-          color: white;
-          border: none;
-          padding: 15px;
-          border-radius: 8px;
-          font-size: 1rem;
-          cursor: pointer;
-          transition: background 0.3s;
-        }
-
-        .fix-btn:hover, .ml-analysis-btn:hover {
-          background: #5a6268;
-        }
-
-        .fix-btn:disabled, .ml-analysis-btn:disabled {
-          background: #cccccc;
-          cursor: not-allowed;
-        }
-
-        @media (max-width: 768px) {
-          .button-group {
-            grid-template-columns: 1fr;
-          }
-        }
-
-        .ml-analysis-btn {
-          background: #2c3e50;
-          color: white;
-          border: none;
-          padding: 10px 20px;
-          border-radius: 5px;
-          cursor: pointer;
-          margin-left: 10px;
-        }
-
-        .ml-analysis-btn:disabled {
-          background: #95a5a6;
-          cursor: not-allowed;
-        }
-
-        .ml-modal-overlay {
-          position: fixed;
-          top: 0;
-          left: 0;
-          right: 0;
-          bottom: 0;
-          background: rgba(0, 0, 0, 0.7);
-          display: flex;
-          justify-content: center;
-          align-items: center;
-          z-index: 1000;
-        }
-
-        .ml-modal {
-          background: white;
-          border-radius: 12px;
-          padding: 2rem;
-          max-width: 800px;
-          width: 90%;
-          max-height: 90vh;
-          overflow-y: auto;
-          position: relative;
-          box-shadow: 0 4px 20px rgba(0, 0, 0, 0.2);
-        }
-
-        .ml-modal-close {
-          position: absolute;
-          top: 1rem;
-          right: 1rem;
-          background: none;
-          border: none;
-          font-size: 1.5rem;
-          cursor: pointer;
-          color: #666;
-        }
-
-        .ml-score-section {
-          text-align: center;
-          margin: 2rem 0;
-          padding: 1.5rem;
-          background: #f8f9fa;
-          border-radius: 8px;
-        }
-
-        .score-value {
-          font-size: 3rem;
-          font-weight: bold;
-          color: #2c3e50;
-          margin: 0.5rem 0;
-        }
-
-        .score-category {
-          font-size: 1.2rem;
-          color: #4a89dc;
-          margin-bottom: 0.5rem;
-        }
-
-        .confidence {
-          color: #666;
-        }
-
-        .feature-grid {
-          display: grid;
-          grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-          gap: 1rem;
-          margin: 1rem 0;
-        }
-
-        .feature {
-          display: flex;
-          justify-content: space-between;
-          padding: 0.75rem;
-          background: #f8f9fa;
-          border-radius: 6px;
-        }
-
-        .char-types {
-          margin: 2rem 0;
-        }
-
-        .char-type-grid {
-          display: grid;
-          grid-template-columns: repeat(auto-fit, minmax(100px, 1fr));
-          gap: 1rem;
-          margin-top: 1rem;
-        }
-
-        .char-type {
-          display: flex;
-          flex-direction: column;
-          align-items: center;
-          padding: 1rem;
-          background: #f8f9fa;
-          border-radius: 6px;
-          opacity: 0.5;
-          transition: all 0.3s ease;
-        }
-
-        .char-type.active {
-          opacity: 1;
-          background: #e3f2fd;
-          color: #1976d2;
-        }
-
-        .crack-times {
-          margin: 2rem 0;
-          background: #f8f9fa;
-          border-radius: 12px;
-          padding: 1.5rem;
-        }
-
-        .crack-times h3 {
-          margin-bottom: 1.5rem;
-          color: #2c3e50;
-          font-size: 1.25rem;
-        }
-
-        .crack-times-grid {
-          display: grid;
-          gap: 1rem;
-        }
-
-        .crack-time-card {
-          background: white;
-          border-radius: 8px;
-          padding: 1.25rem;
-          display: flex;
-          justify-content: space-between;
-          align-items: center;
-          box-shadow: 0 2px 4px rgba(0,0,0,0.05);
-          transition: transform 0.2s, box-shadow 0.2s;
-        }
-
-        .crack-time-card:hover {
-          transform: translateY(-2px);
-          box-shadow: 0 4px 8px rgba(0,0,0,0.1);
-        }
-
-        .attack-type {
-          display: flex;
-          flex-direction: column;
-          gap: 0.5rem;
-        }
-
-        .method {
-          font-weight: 600;
-          color: #2c3e50;
-          font-size: 1.1rem;
-        }
-
-        .description {
-          color: #666;
-          font-size: 0.9rem;
-        }
-
-        .time-estimate {
-          text-align: right;
-          padding-left: 1rem;
-        }
-
-        .time {
-          font-weight: 500;
-          color: #1a73e8;
-          font-size: 1rem;
-          white-space: nowrap;
-        }
-
-        @media (max-width: 768px) {
-          .crack-time-card {
-            flex-direction: column;
-            text-align: center;
-            gap: 1rem;
-          }
-
-          .time-estimate {
-            text-align: center;
-            padding-left: 0;
-          }
-
-          .attack-type {
-            align-items: center;
-          }
-        }
-
-        .ml-suggestions {
-          margin: 2rem 0;
-        }
-
-        .ml-suggestions ul {
-          list-style-type: none;
-          padding: 0;
-        }
-
-        .ml-suggestions li {
-          margin: 0.5rem 0;
-          padding: 0.75rem;
-          background: #fff3e0;
-          border-radius: 6px;
-        }
-
-        .vulnerability-analysis-btn {
-          background: #2c3e50;
-          color: white;
-          border: none;
-          padding: 12px 20px;
-          border-radius: 8px;
-          font-size: 1rem;
-          cursor: pointer;
-          transition: all 0.3s;
-          margin-top: 15px;
-          width: 100%;
-          display: flex;
-          justify-content: center;
-          align-items: center;
-          gap: 8px;
-        }
-        
-        .vulnerability-analysis-btn:hover {
-          background: #34495e;
-          transform: translateY(-2px);
-          box-shadow: 0 4px 8px rgba(0,0,0,0.1);
-        }
-
-        .chatbot-modal {
-          position: fixed;
-          top: 0;
-          left: 0;
-          right: 0;
-          bottom: 0;
-          background: rgba(0, 0, 0, 0.7);
-          display: flex;
-          justify-content: center;
-          align-items: center;
-          z-index: 1000;
-        }
-
-        .chatbot-modal-content {
-          background: white;
-          border-radius: 12px;
-          padding: 2rem;
-          max-width: 800px;
-          width: 90%;
-          max-height: 90vh;
-          overflow-y: auto;
-          position: relative;
-          box-shadow: 0 4px 20px rgba(0, 0, 0, 0.2);
-        }
-
-        .close-chatbot {
-          position: absolute;
-          top: 1rem;
-          right: 1rem;
-          background: none;
-          border: none;
-          font-size: 1.5rem;
-          cursor: pointer;
-          color: #666;
-        }
-
-        .vulnerability-analysis-btn {
-          background: #2c3e50;
-          color: white;
-          border: none;
-          padding: 12px 20px;
-          border-radius: 8px;
-          font-size: 1rem;
-          cursor: pointer;
-          transition: all 0.3s;
-          margin-top: 15px;
-          width: 100%;
-          display: flex;
-          justify-content: center;
-          align-items: center;
-          gap: 8px;
-        }
-        
-        .vulnerability-analysis-btn:hover {
-          background: #34495e;
-          transform: translateY(-2px);
-          box-shadow: 0 4px 8px rgba(0,0,0,0.1);
-        }
-      `}</style>
     </div>
   );
 };
