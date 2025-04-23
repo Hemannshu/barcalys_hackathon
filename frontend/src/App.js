@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 import './App.css';
 import AnimationPage from './AnimationPage';
@@ -16,24 +16,13 @@ function App() {
   const [showPassword, setShowPassword] = useState(false);
   const [showAnimation, setShowAnimation] = useState(true);
 
-  // Check if this is the initial load
-  useEffect(() => {
-    const hasVisited = sessionStorage.getItem('hasVisited');
-    if (hasVisited) {
-      setShowAnimation(false);
-    } else {
-      sessionStorage.setItem('hasVisited', 'true');
-    }
-  }, []);
-
   const handleAnimationComplete = () => {
     setShowAnimation(false);
   };
 
-  // Don't show animation for password-health route
+  // Only show animation on root path
   const currentPath = window.location.pathname;
-  const skipAnimationRoutes = ['/password-health', '/dashboard', '/login', '/signup'];
-  const shouldShowAnimation = showAnimation && !skipAnimationRoutes.includes(currentPath);
+  const shouldShowAnimation = showAnimation && currentPath === '/';
 
   return (
     <Router>
