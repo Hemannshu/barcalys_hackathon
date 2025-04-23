@@ -1,0 +1,147 @@
+.animation-container {
+  position: fixed;
+  width: 100vw;
+  height: 100vh;
+  background: rgba(18, 40, 76, 0.95); /* Barclays dark blue with transparency */
+  overflow: hidden;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  color: white;
+  font-family: 'Arial', sans-serif;
+}
+
+/* Binary matrix background */
+.binary-matrix {
+  position: absolute;
+  width: 100%;
+  height: 100%;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(30px, 1fr));
+  gap: 15px;
+  padding: 20px;
+  opacity: 0.15;
+}
+
+.binary-digit {
+  font-family: monospace;
+  font-size: 1.1rem;
+  animation: blink 1.5s infinite alternate;
+}
+
+/* Cyber shield animation */
+.cyber-shield {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  z-index: 1;
+}
+
+.shield-core {
+  position: relative;
+  width: 180px;
+  height: 180px;
+}
+
+.shield-icon {
+  position: absolute;
+  font-size: 5rem;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  z-index: 3;
+  color: #00AEEF;
+  text-shadow: 0 0 15px rgba(0, 174, 239, 0.7);
+}
+
+.shield-ring {
+  position: absolute;
+  border: 3px solid #00AEEF;
+  border-radius: 50%;
+  animation: pulse 2s infinite;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  opacity: 0;
+}
+
+.shield-ring.delay-1 {
+  animation-delay: 0.66s;
+}
+
+.shield-ring.delay-2 {
+  animation-delay: 1.33s;
+}
+
+/* Password strength animation */
+.password-strength {
+  position: absolute;
+  bottom: 25%;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.strength-char {
+  font-size: 2.5rem;
+  font-weight: bold;
+  color: #FF4D4D;
+  animation: charFloat 0.8s ease-out both;
+}
+
+.strength-char.strong {
+  color: #00E676;
+}
+
+.strength-transform {
+  font-size: 2rem;
+  margin: 0 10px;
+  color: #00AEEF;
+  animation: pulse 2s infinite;
+}
+
+/* Title styles */
+.cyber-title {
+  position: absolute;
+  top: 20%;
+  text-align: center;
+  z-index: 2;
+}
+
+.title-main {
+  font-size: 4rem;
+  margin: 0;
+  background: linear-gradient(90deg, #00AEEF, #FFFFFF);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  letter-spacing: 3px;
+  text-shadow: 0 0 10px rgba(0, 174, 239, 0.3);
+}
+
+.title-sub {
+  font-size: 1.5rem;
+  margin: 1rem 0 0;
+  color: rgba(255, 255, 255, 0.9);
+  font-weight: 300;
+  letter-spacing: 1px;
+}
+
+/* Animations */
+@keyframes blink {
+  0% { opacity: 0.3; }
+  100% { opacity: 0.9; }
+}
+
+@keyframes pulse {
+  0% { transform: scale(0.8); opacity: 0; }
+  50% { opacity: 0.8; }
+  100% { transform: scale(1.3); opacity: 0; }
+}
+
+@keyframes charFloat {
+  0% { transform: translateY(30px) rotate(-15deg); opacity: 0; }
+  100% { transform: translateY(0) rotate(0); opacity: 1; }
+}

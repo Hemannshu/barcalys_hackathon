@@ -3,6 +3,7 @@ import './App.css';
 import AttackSimulator from './AttackSimulator';
 import logo from './images/image.png';
 import { useNavigate } from 'react-router-dom';
+import Chatbot from './Chatbot';
 
 // Helper function to determine strength class based on score
 const getStrengthClass = (score) => {
@@ -24,6 +25,7 @@ const MainPage = ({ password, setPassword, showPassword, setShowPassword }) => {
   const [isMLLoading, setIsMLLoading] = useState(false);
   const [showMLModal, setShowMLModal] = useState(false);
   const [mlResults, setMLResults] = useState(null);
+  const [showChatbot, setShowChatbot] = useState(false);
   const navigate = useNavigate();
   
   useEffect(() => {
@@ -136,24 +138,60 @@ const MainPage = ({ password, setPassword, showPassword, setShowPassword }) => {
     if (!pwd) return 0;
     
     let score = 0;
-    score += Math.min(4, Math.floor(pwd.length / 3)) * 10;
-    score += /[A-Z]/.test(pwd) ? 15 : 0;
-    score += /[0-9]/.test(pwd) ? 15 : 0;
-    score += /[^A-Za-z0-9]/.test(pwd) ? 20 : 0;
-    score += !(/^[a-z]+$/i.test(pwd)) ? 20 : 0;
-    score += !(/(.)\1{2,}/.test(pwd)) ? 15 : 0;
+    const length = pwd.length;
     
-    return Math.min(100, score);
+    // Length score (max 30 points)
+    if (length >= 12) score += 30;
+    else if (length >= 10) score += 25;
+    else if (length >= 8) score += 20;
+    else score += Math.max(0, length * 2); // 2 points per character for short passwords
+
+    // Character variety score (max 30 points)
+    const hasLower = /[a-z]/.test(pwd);
+    const hasUpper = /[A-Z]/.test(pwd);
+    const hasDigit = /[0-9]/.test(pwd);
+    const hasSpecial = /[^A-Za-z0-9]/.test(pwd);
+    
+    score += (hasLower ? 7.5 : 0);
+    score += (hasUpper ? 7.5 : 0);
+    score += (hasDigit ? 7.5 : 0);
+    score += (hasSpecial ? 7.5 : 0);
+
+    // Complexity bonuses (max 20 points)
+    const charTypes = [hasLower, hasUpper, hasDigit, hasSpecial].filter(Boolean).length;
+    score += (charTypes - 1) * 5; // Bonus for mixing character types
+
+    // Pattern penalties
+    const patterns = {
+      repeatingChars: /(.)\1{2,}/,                    // aaa, 111, ...
+      sequentialLetters: /abc|bcd|cde|def|efg|fgh/i,  // abc, cde, ...
+      sequentialNumbers: /123|234|345|456|567|678|789/, // 123, 234, ...
+      commonWords: /password|admin|user|login|welcome/i,
+      keyboardPatterns: /qwerty|asdfgh|zxcvbn/i
+    };
+
+    // Apply penalties (max -30 points)
+    Object.values(patterns).forEach(pattern => {
+      if (pattern.test(pwd)) {
+        score -= 6;
+      }
+    });
+
+    // Entropy bonus (max 20 points)
+    const charsetSize = (hasLower ? 26 : 0) + (hasUpper ? 26 : 0) + 
+                       (hasDigit ? 10 : 0) + (hasSpecial ? 32 : 0);
+    const entropy = Math.log2(Math.pow(charsetSize || 1, length));
+    score += Math.min(20, entropy / 4);
+
+    // Final adjustments
+    score = Math.max(0, Math.min(100, score)); // Ensure score is between 0 and 100
+    
+    // Convert to 0-10 scale for display
+    return score / 10;
   };
 
   const handleGenerateSuggestions = () => {
-    const suggestions = generateStrongPasswords(password);
-    const suggestionsWithStrength = suggestions.map(pwd => ({
-      password: pwd,
-      strength: calculatePasswordStrength(pwd)
-    }));
-    setPasswordSuggestions(suggestionsWithStrength);
-    setShowSuggestions(true);
+    setShowChatbot(true);
   };
 
   const calculateAttackRiskScores = useCallback((pwd) => {
@@ -466,55 +504,115 @@ const MainPage = ({ password, setPassword, showPassword, setShowPassword }) => {
         throw new Error(data.message || 'Failed to analyze password');
       }
       
+      // Calculate our own strength score
+      const strengthScore = calculatePasswordStrength(password);
+      
       // Transform the data to match our UI expectations
       const processedData = {
-        score: Math.round((data?.strength_score || 0) / 10), // Convert 0-100 to 0-10
-        category: data?.category || 'Unknown',
+        score: strengthScore,
+        category: getStrengthCategory(strengthScore),
         confidence: data?.confidence || 0,
         details: {
-          length: data?.features?.length || 0,
-          entropy: data?.features?.entropy || 0,
+          length: data?.features?.length || password.length,
+          entropy: data?.features?.entropy || calculateEntropy(password),
           characterTypes: {
-            uppercase: data?.features?.has_upper || false,
-            lowercase: data?.features?.has_lower || false,
-            numbers: data?.features?.has_digit || false,
-            symbols: data?.features?.has_special || false,
-            total: data?.features?.char_types || 0
+            uppercase: data?.features?.has_upper || /[A-Z]/.test(password),
+            lowercase: data?.features?.has_lower || /[a-z]/.test(password),
+            numbers: data?.features?.has_digit || /[0-9]/.test(password),
+            symbols: data?.features?.has_special || /[^A-Za-z0-9]/.test(password),
+            total: data?.features?.char_types || [/[A-Z]/, /[a-z]/, /[0-9]/, /[^A-Za-z0-9]/]
+              .filter(regex => regex.test(password)).length
           }
         },
         crackTimes: data?.crack_times || {},
-        suggestions: data?.suggestions || []
+        suggestions: data?.suggestions || generateSuggestions(password, strengthScore)
       };
 
-      console.log('Processed data:', processedData); // Debug log
+      console.log('Processed data:', processedData);
       setMLResults(processedData);
       setShowMLModal(true);
     } catch (error) {
       console.error('ML Analysis error:', error);
+      // Even on error, calculate and show local strength analysis
+      const strengthScore = calculatePasswordStrength(password);
       setMLResults({
         error: true,
         message: error.message || 'Unable to analyze password. Please try again.',
-        score: 0,
-        category: 'Error',
-        confidence: 0,
+        score: strengthScore,
+        category: getStrengthCategory(strengthScore),
+        confidence: 0.85, // Local analysis confidence
         details: {
-          length: password?.length || 0,
-          entropy: 0,
+          length: password.length,
+          entropy: calculateEntropy(password),
           characterTypes: {
-            uppercase: false,
-            lowercase: false,
-            numbers: false,
-            symbols: false,
-            total: 0
+            uppercase: /[A-Z]/.test(password),
+            lowercase: /[a-z]/.test(password),
+            numbers: /[0-9]/.test(password),
+            symbols: /[^A-Za-z0-9]/.test(password),
+            total: [/[A-Z]/, /[a-z]/, /[0-9]/, /[^A-Za-z0-9]/]
+              .filter(regex => regex.test(password)).length
           }
         },
         crackTimes: {},
-        suggestions: [error.message || 'Unable to analyze password. Please try again.']
+        suggestions: generateSuggestions(password, strengthScore)
       });
       setShowMLModal(true);
     } finally {
       setIsMLLoading(false);
     }
+  };
+
+  // Helper function to get strength category based on score
+  const getStrengthCategory = (score) => {
+    if (score >= 9) return 'Very Strong';
+    if (score >= 7) return 'Strong';
+    if (score >= 5) return 'Moderate';
+    if (score >= 3) return 'Weak';
+    return 'Very Weak';
+  };
+
+  // Helper function to calculate entropy
+  const calculateEntropy = (password) => {
+    const charsetSize = (/[a-z]/.test(password) ? 26 : 0) +
+                       (/[A-Z]/.test(password) ? 26 : 0) +
+                       (/[0-9]/.test(password) ? 10 : 0) +
+                       (/[^A-Za-z0-9]/.test(password) ? 32 : 0);
+    return Math.log2(Math.pow(charsetSize || 1, password.length));
+  };
+
+  // Helper function to generate suggestions based on password analysis
+  const generateSuggestions = (password, score) => {
+    const suggestions = [];
+    
+    if (password.length < 12) {
+      suggestions.push('Increase password length to at least 12 characters');
+    }
+    
+    if (!/[A-Z]/.test(password)) {
+      suggestions.push('Add uppercase letters');
+    }
+    
+    if (!/[a-z]/.test(password)) {
+      suggestions.push('Add lowercase letters');
+    }
+    
+    if (!/[0-9]/.test(password)) {
+      suggestions.push('Add numbers');
+    }
+    
+    if (!/[^A-Za-z0-9]/.test(password)) {
+      suggestions.push('Add special characters');
+    }
+    
+    if (/(.)\1{2,}/.test(password)) {
+      suggestions.push('Avoid repeating characters');
+    }
+    
+    if (/123|abc|qwerty|password/i.test(password)) {
+      suggestions.push('Avoid common patterns and sequences');
+    }
+    
+    return suggestions;
   };
 
   return (
@@ -566,7 +664,7 @@ const MainPage = ({ password, setPassword, showPassword, setShowPassword }) => {
             className="fix-btn"
             disabled={!password}
           >
-            AI Fix
+            Fix It AI
           </button>
 
           <button
@@ -681,7 +779,35 @@ const MainPage = ({ password, setPassword, showPassword, setShowPassword }) => {
                 </ul>
                 <button 
                   className="vulnerability-analysis-btn"
-                  onClick={() => navigate('/vulnerability-analysis', { state: { password } })}
+                  onClick={() => {
+                    const analysisData = {
+                      password,
+                      score: analysis.entropyScore / 100, // Convert to 0-1 scale
+                      category: analysis.feedback?.strengthCategory || 'Unknown',
+                      confidence: 0.95,
+                      features: {
+                        length: password.length,
+                        has_upper: /[A-Z]/.test(password),
+                        has_lower: /[a-z]/.test(password),
+                        has_digit: /[0-9]/.test(password),
+                        has_special: /[^A-Za-z0-9]/.test(password),
+                        char_types: ((/[A-Z]/.test(password) ? 1 : 0) +
+                                   (/[a-z]/.test(password) ? 1 : 0) +
+                                   (/[0-9]/.test(password) ? 1 : 0) +
+                                   (/[^A-Za-z0-9]/.test(password) ? 1 : 0))
+                      },
+                      entropy: analysis.entropyScore,
+                      patterns: analysis.vulnerabilities?.map(v => ({
+                        type: v.name,
+                        pattern: v.description,
+                        severity: v.severity
+                      })) || [],
+                      crack_times: analysis.crack_times || {}
+                    };
+                    navigate('/vulnerability-analysis', { 
+                      state: { analysisData } 
+                    });
+                  }}
                 >
                   View Vulnerability Analysis
                 </button>
@@ -765,16 +891,27 @@ const MainPage = ({ password, setPassword, showPassword, setShowPassword }) => {
               </div>
             )}
 
-            {mlResults.suggestions?.length > 0 && (
-              <div className="ml-suggestions">
-                <h3>Improvement Suggestions</h3>
-                <ul>
-                  {mlResults.suggestions.map((suggestion, index) => (
-                    <li key={index}>{suggestion}</li>
-                  ))}
-                </ul>
-              </div>
-            )}
+            
+          </div>
+        </div>
+      )}
+
+      {showChatbot && (
+        <div className="chatbot-modal">
+          <div className="chatbot-modal-content">
+            <button 
+              className="close-chatbot"
+              onClick={() => setShowChatbot(false)}
+            >
+              ×
+            </button>
+            <Chatbot 
+              password={password}
+              onPasswordSelect={(newPassword) => {
+                setPassword(newPassword);
+                setShowChatbot(false);
+              }}
+            />
           </div>
         </div>
       )}
@@ -1042,6 +1179,65 @@ const MainPage = ({ password, setPassword, showPassword, setShowPassword }) => {
           padding: 0.75rem;
           background: #fff3e0;
           border-radius: 6px;
+        }
+
+        .vulnerability-analysis-btn {
+          background: #2c3e50;
+          color: white;
+          border: none;
+          padding: 12px 20px;
+          border-radius: 8px;
+          font-size: 1rem;
+          cursor: pointer;
+          transition: all 0.3s;
+          margin-top: 15px;
+          width: 100%;
+          display: flex;
+          justify-content: center;
+          align-items: center;
+          gap: 8px;
+        }
+        
+        .vulnerability-analysis-btn:hover {
+          background: #34495e;
+          transform: translateY(-2px);
+          box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+        }
+
+        .chatbot-modal {
+          position: fixed;
+          top: 0;
+          left: 0;
+          right: 0;
+          bottom: 0;
+          background: rgba(0, 0, 0, 0.7);
+          display: flex;
+          justify-content: center;
+          align-items: center;
+          z-index: 1000;
+        }
+
+        .chatbot-modal-content {
+          background: white;
+          border-radius: 12px;
+          padding: 2rem;
+          max-width: 800px;
+          width: 90%;
+          max-height: 90vh;
+          overflow-y: auto;
+          position: relative;
+          box-shadow: 0 4px 20px rgba(0, 0, 0, 0.2);
+        }
+
+        .close-chatbot {
+          position: absolute;
+          top: 1rem;
+          right: 1rem;
+          background: none;
+          border: none;
+          font-size: 1.5rem;
+          cursor: pointer;
+          color: #666;
         }
 
         .vulnerability-analysis-btn {
