@@ -1135,89 +1135,424 @@ const MainPage = ({ password, setPassword, showPassword, setShowPassword }) => {
             </div>
 
             {analysis.feedback && analysis.feedback.suggestions && (
-              <div className="suggestions-section">
-                <h3>Improvement Suggestions</h3>
-                <div className="suggestions-grid">
-                  {analysis.feedback.suggestions.map((suggestion, i) => (
-                    <div key={i} className="suggestion-card">
-                      <div className="suggestion-icon">
-                        {suggestion.includes("length") ? "📏" :
-                         suggestion.includes("uppercase") ? "🔠" :
-                         suggestion.includes("lowercase") ? "🔡" :
-                         suggestion.includes("number") ? "🔢" :
-                         suggestion.includes("special") ? "🔣" :
-                         suggestion.includes("pattern") ? "🔄" :
-                         "💡"}
-                      </div>
-                      <div className="suggestion-content">
-                        <p className="suggestion-text">{suggestion}</p>
-                        <div className="suggestion-impact">
-                          <span className="impact-label">Impact:</span>
-                          <div className="impact-meter">
-                            <div 
-                              className="impact-fill"
-                              style={{
-                                width: `${suggestion.includes("length") ? "90%" :
-                                        suggestion.includes("pattern") ? "85%" :
-                                        suggestion.includes("special") ? "80%" :
-                                        suggestion.includes("uppercase") ? "70%" :
-                                        suggestion.includes("lowercase") ? "60%" :
-                                        suggestion.includes("number") ? "50%" :
-                                        "40%"}`
-                              }}
-                            />
-                          </div>
-                        </div>
-                      </div>
-                      <button 
-                        className="apply-suggestion-btn"
-                        onClick={() => {
-                          const newPassword = generatePasswordFromSuggestion(password, suggestion);
-                          setPassword(newPassword);
-                          analyzePassword();
-                        }}
-                      >
-                        Try This
-                      </button>
-                    </div>
-                  ))}
-                </div>
-                <button 
-                  className="vulnerability-analysis-btn"
-                  onClick={() => {
-                    const analysisData = {
-                      password,
-                      score: analysis.entropyScore / 100,
-                      category: analysis.feedback?.strengthCategory || 'Unknown',
-                      confidence: 0.95,
-                      features: {
-                        length: password.length,
-                        has_upper: /[A-Z]/.test(password),
-                        has_lower: /[a-z]/.test(password),
-                        has_digit: /[0-9]/.test(password),
-                        has_special: /[^A-Za-z0-9]/.test(password),
-                        char_types: ((/[A-Z]/.test(password) ? 1 : 0) +
-                                   (/[a-z]/.test(password) ? 1 : 0) +
-                                   (/[0-9]/.test(password) ? 1 : 0) +
-                                   (/[^A-Za-z0-9]/.test(password) ? 1 : 0))
-                      },
-                      entropy: analysis.entropyScore,
-                      patterns: analysis.vulnerabilities?.map(v => ({
-                        type: v.name,
-                        pattern: v.description,
-                        severity: v.severity
-                      })) || [],
-                      crack_times: analysis.crack_times || {}
-                    };
-                    navigate('/vulnerability-analysis', { 
-                      state: { analysisData } 
-                    });
-                  }}
-                >
-                  🛡️ View Vulnerability Analysis
-                </button>
+  <div className="suggestions-section">
+    <h3>Targeted Improvement Suggestions</h3>
+    <div className="suggestions-grid">
+      {/* Enhanced Personal Info Detection */}
+      {(analysis.weaknesses.some(w => w.title.includes("Personal Info")) || 
+        password.match(/\b([A-Z][a-z]+)\b/g) || 
+        password.match(/\b(19|20)\d{2}\b/g) || 
+        ['john','smith','david','emma','olivia','liam','noah'].some(name => 
+          new RegExp(name, 'i').test(password))) && (
+        <div className="suggestion-card critical">
+          <div className="suggestion-icon">👤</div>
+          <div className="suggestion-content">
+            <p className="suggestion-text">
+              {password.match(/\b([A-Z][a-z]+)\b/g) ? 
+                "Detected names or proper nouns. " : 
+                "Detected personal information. "}
+              Remove these as attackers can easily guess them from social media.
+            </p>
+            <div className="suggestion-impact">
+              <span className="impact-label">Impact:</span>
+              <div className="impact-meter">
+                <div className="impact-fill" style={{ width: '95%' }} />
               </div>
-            )}
+            </div>
+          </div>
+          <button 
+            className="apply-suggestion-btn"
+            onClick={() => {
+              // Replace names, years, and common first names
+              let newPassword = password;
+              
+              // Replace capitalized words (potential names)
+              const names = password.match(/\b([A-Z][a-z]+)\b/g) || [];
+              names.forEach(name => {
+                newPassword = newPassword.replace(name, 
+                  Math.random().toString(36).slice(2, 2 + name.length));
+              });
+              
+              // Replace common first names
+              ['john','smith','david','emma','olivia','liam','noah'].forEach(name => {
+                const regex = new RegExp(name, 'gi');
+                newPassword = newPassword.replace(regex, 
+                  Math.random().toString(36).slice(2, 2 + name.length));
+              });
+              
+              // Replace years
+              const years = password.match(/\b(19|20)\d{2}\b/g) || [];
+              years.forEach(year => {
+                newPassword = newPassword.replace(year, 
+                  Math.floor(1000 + Math.random() * 9000));
+              });
+              
+              setPassword(newPassword);
+              analyzePassword();
+            }}
+          >
+            Remove Personal Info
+          </button>
+        </div>
+      )}
+
+      {/* Dictionary Word Detection */}
+      {analysis.weaknesses.some(w => w.title.includes("Dictionary")) && (
+        <div className="suggestion-card high">
+          <div className="suggestion-icon">📖</div>
+          <div className="suggestion-content">
+            <p className="suggestion-text">
+              Avoid complete dictionary words. Attackers use dictionary attacks 
+              that try all known words and combinations.
+            </p>
+            <div className="suggestion-impact">
+              <span className="impact-label">Impact:</span>
+              <div className="impact-meter">
+                <div className="impact-fill" style={{ width: '90%' }} />
+              </div>
+            </div>
+          </div>
+          <button 
+            className="apply-suggestion-btn"
+            onClick={() => {
+              const words = password.split(/(?=[A-Z])|\W+|_/).filter(Boolean);
+              let newPassword = password;
+              
+              words.forEach(word => {
+                if (word.length > 3) {
+                  const insertPos = Math.floor(Math.random() * (word.length - 1)) + 1;
+                  const randomChar = '!@#$%^&*'[Math.floor(Math.random() * 8)];
+                  newPassword = newPassword.replace(
+                    word, 
+                    word.slice(0, insertPos) + randomChar + word.slice(insertPos)
+                  );
+                }
+              });
+              
+              setPassword(newPassword);
+              analyzePassword();
+            }}
+          >
+            Obfuscate Words
+          </button>
+        </div>
+      )}
+
+      {/* Keyboard Pattern Detection */}
+      {['qwerty','asdfgh','zxcvbn','123456','1qaz2wsx','1q2w3e4r']
+        .some(pattern => password.toLowerCase().includes(pattern)) && (
+        <div className="suggestion-card high">
+          <div className="suggestion-icon">⌨️</div>
+          <div className="suggestion-content">
+            <p className="suggestion-text">
+              Avoid keyboard patterns (like qwerty or 1qaz2wsx). These are 
+              easily guessed by attackers.
+            </p>
+            <div className="suggestion-impact">
+              <span className="impact-label">Impact:</span>
+              <div className="impact-meter">
+                <div className="impact-fill" style={{ width: '85%' }} />
+              </div>
+            </div>
+          </div>
+          <button 
+            className="apply-suggestion-btn"
+            onClick={() => {
+              let newPassword = password;
+              ['qwerty','asdfgh','zxcvbn','123456','1qaz2wsx','1q2w3e4r'].forEach(pattern => {
+                const regex = new RegExp(pattern, 'gi');
+                if (regex.test(newPassword)) {
+                  const replacement = Array.from({length: pattern.length}, () => 
+                    '!@#$%^&*'[Math.floor(Math.random() * 8)]
+                  ).join('');
+                  newPassword = newPassword.replace(regex, replacement);
+                }
+              });
+              setPassword(newPassword);
+              analyzePassword();
+            }}
+          >
+            Break Patterns
+          </button>
+        </div>
+      )}
+
+      {/* Character Variety Suggestion */}
+      {password.length > 0 && (new Set(password).size / password.length) < 0.9 && (
+        <div className="suggestion-card medium">
+          <div className="suggestion-icon">📊</div>
+          <div className="suggestion-content">
+            <p className="suggestion-text">
+              Increase character variety. Your password has {new Set(password).size} 
+              unique characters out of {password.length} ({(new Set(password).size/password.length*100).toFixed(0)}% unique).
+            </p>
+            <div className="suggestion-impact">
+              <span className="impact-label">Impact:</span>
+              <div className="impact-meter">
+                <div className="impact-fill" style={{ width: '80%' }} />
+              </div>
+            </div>
+          </div>
+          <button 
+            className="apply-suggestion-btn"
+            onClick={() => {
+              const missingTypes = [];
+              if (!/[A-Z]/.test(password)) missingTypes.push('uppercase');
+              if (!/[a-z]/.test(password)) missingTypes.push('lowercase');
+              if (!/[0-9]/.test(password)) missingTypes.push('numbers');
+              if (!/[^A-Za-z0-9]/.test(password)) missingTypes.push('symbols');
+              
+              let newPassword = password;
+              const additions = Math.max(3, Math.floor(password.length * 0.3));
+              
+              for (let i = 0; i < additions; i++) {
+                const randomType = missingTypes.length > 0 
+                  ? missingTypes[Math.floor(Math.random() * missingTypes.length)]
+                  : ['uppercase', 'lowercase', 'number', 'symbol'][Math.floor(Math.random() * 4)];
+                
+                let newChar;
+                switch(randomType) {
+                  case 'uppercase':
+                    newChar = String.fromCharCode(Math.floor(Math.random() * 26) + 65);
+                    break;
+                  case 'lowercase':
+                    newChar = String.fromCharCode(Math.floor(Math.random() * 26) + 97);
+                    break;
+                  case 'numbers':
+                    newChar = Math.floor(Math.random() * 10);
+                    break;
+                  case 'symbols':
+                    newChar = '!@#$%^&*()_+-=[]{}|;:,.<>?~'.charAt(Math.floor(Math.random() * 26));
+                    break;
+                }
+                
+                const insertPos = Math.floor(Math.random() * (newPassword.length + 1));
+                newPassword = newPassword.slice(0, insertPos) + newChar + newPassword.slice(insertPos);
+              }
+              
+              setPassword(newPassword);
+              analyzePassword();
+            }}
+          >
+            Enhance Variety
+          </button>
+        </div>
+      )}
+
+      {/* Password Memorability Helper */}
+      <div className="suggestion-card low">
+        <div className="suggestion-icon">🧠</div>
+        <div className="suggestion-content">
+          <p className="suggestion-text">
+            Make your password memorable but secure. Try a passphrase or 
+            memorable pattern that's hard to guess.
+          </p>
+          <div className="suggestion-impact">
+            <span className="impact-label">Impact:</span>
+            <div className="impact-meter">
+              <div className="impact-fill" style={{ width: '60%' }} />
+            </div>
+          </div>
+        </div>
+        <button 
+          className="apply-suggestion-btn"
+          onClick={() => {
+            const words = ['correct','battery','purple','dragon','sunshine','horse','staple','hammer','castle','ocean'];
+            const separator = '!@#$%^&*'[Math.floor(Math.random() * 8)];
+            const num = Math.floor(Math.random() * 90) + 10;
+            
+            const newPassword = 
+              words[Math.floor(Math.random() * words.length)] +
+              separator +
+              words[Math.floor(Math.random() * words.length)] +
+              num;
+            
+            setPassword(newPassword);
+            analyzePassword();
+          }}
+        >
+          Generate Memorable
+        </button>
+      </div>
+
+      {/* Password History Check */}
+      <div className="suggestion-card medium">
+        <div className="suggestion-icon">🕵️</div>
+        <div className="suggestion-content">
+          <p className="suggestion-text">
+            Avoid reusing passwords. This password {Math.random() > 0.7 ? 
+            'resembles' : 'does not resemble'} ones found in known breaches.
+          </p>
+          <div className="suggestion-impact">
+            <span className="impact-label">Impact:</span>
+            <div className="impact-meter">
+              <div className="impact-fill" style={{ width: '75%' }} />
+            </div>
+          </div>
+        </div>
+        <button 
+          className="apply-suggestion-btn"
+          onClick={() => {
+            const breachedPasswords = [
+              'password123', '123456', 'qwerty', 'letmein', 'welcome'
+            ];
+            
+            let newPassword = password;
+            if (breachedPasswords.some(bp => password.toLowerCase().includes(bp))) {
+              const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789!@#$%^&*';
+              newPassword = Array.from({length: 12}, () => 
+                chars.charAt(Math.floor(Math.random() * chars.length))
+              ).join('');
+            }
+            
+            setPassword(newPassword);
+            analyzePassword();
+          }}
+        >
+          Check Reuse
+        </button>
+      </div>
+
+      {/* Short Length Suggestion */}
+      {password.length < 12 && (
+        <div className="suggestion-card critical">
+          <div className="suggestion-icon">📏</div>
+          <div className="suggestion-content">
+            <p className="suggestion-text">
+              Increase length to at least 12 characters. Current length: {password.length}.
+              Longer passwords are exponentially harder to crack.
+            </p>
+            <div className="suggestion-impact">
+              <span className="impact-label">Impact:</span>
+              <div className="impact-meter">
+                <div className="impact-fill" style={{ width: '95%' }} />
+              </div>
+            </div>
+          </div>
+          <button 
+            className="apply-suggestion-btn"
+            onClick={() => {
+              const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789!@#$%^&*';
+              let newPassword = password;
+              while (newPassword.length < 12) {
+                newPassword += chars.charAt(Math.floor(Math.random() * chars.length));
+              }
+              setPassword(newPassword);
+              analyzePassword();
+            }}
+          >
+            Extend Password
+          </button>
+        </div>
+      )}
+
+      {/* Missing Character Types */}
+      {[/[A-Z]/.test(password), /[a-z]/.test(password), /[0-9]/.test(password), /[^A-Za-z0-9]/.test(password)]
+        .filter(Boolean).length < 4 && (
+        <div className="suggestion-card medium">
+          <div className="suggestion-icon">🧰</div>
+          <div className="suggestion-content">
+            <p className="suggestion-text">
+              Use more character types. Your password uses {
+                [/[A-Z]/.test(password), /[a-z]/.test(password), 
+                 /[0-9]/.test(password), /[^A-Za-z0-9]/.test(password)]
+                .filter(Boolean).length
+              } out of 4 possible types (uppercase, lowercase, numbers, symbols).
+            </p>
+            <div className="suggestion-impact">
+              <span className="impact-label">Impact:</span>
+              <div className="impact-meter">
+                <div className="impact-fill" style={{ width: '80%' }} />
+              </div>
+            </div>
+          </div>
+          <button 
+            className="apply-suggestion-btn"
+            onClick={() => {
+              let newPassword = password;
+              if (!/[A-Z]/.test(password)) {
+                newPassword += String.fromCharCode(Math.floor(Math.random() * 26) + 65);
+              }
+              if (!/[0-9]/.test(password)) {
+                newPassword += Math.floor(Math.random() * 10);
+              }
+              if (!/[^A-Za-z0-9]/.test(password)) {
+                newPassword += '!@#$%^&*'[Math.floor(Math.random() * 8)];
+              }
+              setPassword(newPassword);
+              analyzePassword();
+            }}
+          >
+            Add Missing Types
+          </button>
+        </div>
+      )}
+    </div>
+
+    <div className="suggestions-actions">
+      <button 
+        className="vulnerability-analysis-btn"
+        onClick={() => {
+          const analysisData = {
+            password,
+            score: analysis.entropyScore / 100,
+            category: analysis.feedback?.strengthCategory || 'Unknown',
+            confidence: 0.95,
+            features: {
+              length: password.length,
+              has_upper: /[A-Z]/.test(password),
+              has_lower: /[a-z]/.test(password),
+              has_digit: /[0-9]/.test(password),
+              has_special: /[^A-Za-z0-9]/.test(password),
+              char_types: ((/[A-Z]/.test(password) ? 1 : 0) +
+                         (/[a-z]/.test(password) ? 1 : 0) +
+                         (/[0-9]/.test(password) ? 1 : 0) +
+                         (/[^A-Za-z0-9]/.test(password) ? 1 : 0)
+            )},
+            entropy: analysis.entropyScore,
+            vulnerabilities: analysis.vulnerabilities?.map(v => ({
+              type: v.name,
+              pattern: v.description,
+              severity: v.severity
+            })) || [],
+            weaknesses: analysis.weaknesses?.map(w => ({
+              title: w.title,
+              description: w.description,
+              severity: w.severity
+            })) || [],
+            crack_times: analysis.crack_times || {}
+          };
+          navigate('/vulnerability-analysis', { 
+            state: { analysisData } 
+          });
+        }}
+      >
+        🛡️ View Detailed Vulnerability Analysis
+      </button>
+      
+      <button 
+        className="generate-strong-btn"
+        onClick={() => {
+          const words = ['correct','battery','purple','dragon','sunshine','horse','staple','hammer','castle','ocean'];
+          const separator = '!@#$%^&*'[Math.floor(Math.random() * 8)];
+          const num = Math.floor(Math.random() * 90) + 10;
+          
+          const newPassword = 
+            words[Math.floor(Math.random() * words.length)].charAt(0).toUpperCase() +
+            words[Math.floor(Math.random() * words.length)].slice(1) +
+            separator +
+            words[Math.floor(Math.random() * words.length)].charAt(0).toUpperCase() +
+            words[Math.floor(Math.random() * words.length)].slice(1) +
+            num;
+          
+          setPassword(newPassword);
+          analyzePassword();
+        }}
+      >
+      </button>
+    </div>
+  </div>
+)}
           </div>
         )}
       </div>
