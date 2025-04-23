@@ -1,9 +1,13 @@
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import './AttackSimulator.css';
 
-const CHARACTER_SET = 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789!@#$%^&*()_-+=[]{}|;:,.<>?';
+// Character sets for different password components
+const LOWERCASE = 'abcdefghijklmnopqrstuvwxyz';
+const UPPERCASE = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ';
+const NUMBERS = '0123456789';
+const SYMBOLS = '!@#$%^&*()_-+=[]{}|;:,.<>?';
 
-const AttackSimulator = ({ password = 'defaultPassword', charsetSize = CHARACTER_SET.length }) => {
+const AttackSimulator = ({ password = '' }) => {
   const [simulation, setSimulation] = useState({
     isRunning: false,
     speed: 1,
@@ -14,120 +18,215 @@ const AttackSimulator = ({ password = 'defaultPassword', charsetSize = CHARACTER
     isCracked: false
   });
 
-  // Expanded common passwords and patterns
-  const COMMON_PASSWORDS = useMemo(() => [
-    'password', '123456', '12345678', '1234', 'qwerty', 
-    'letmein', 'admin', 'welcome', 'monkey', 'sunshine',
-    'password1', '123456789', 'football', 'iloveyou', '1234567',
-    'abc123', 'dragon', 'trustno1', 'master', 'superman'
-  ], []);
-
-  const DICTIONARY_PATTERNS = useMemo(() => [
-    { base: '', suffix: '123' },
-    { base: '', suffix: '!' },
-    { base: '', suffix: '2023' },
-    { base: '', suffix: '@123' },
-    { base: 'qwerty', suffix: '123' },
-    { base: 'admin', suffix: '123' },
-    { base: '', suffix: '123!' },
-    { base: '', suffix: '1234' },
-    { base: '', suffix: '1' },
-    { base: '', suffix: '00' }
-  ], []);
-
-  const ATTACK_SPEEDS = useMemo(() => ({
-    bruteForce: 1000000,
-    dictionary: 5000000,
-    hybrid: 3000000
-  }), []);
-
-  const formatTime = useCallback((seconds) => {
-    if (seconds < 60) return `${seconds.toFixed(1)} sec`;
-    if (seconds < 3600) return `${(seconds/60).toFixed(1)} min`;
-    if (seconds < 86400) return `${(seconds/3600).toFixed(1)} hrs`;
-    return `${(seconds/86400).toFixed(1)} days`;
+  // Calculate password entropy in bits
+  const calculateEntropy = useCallback((pwd) => {
+    if (!pwd || pwd.length === 0) return 0;
+    
+    // Determine character set used
+    let charsetSize = 0;
+    if (/[a-z]/.test(pwd)) charsetSize += LOWERCASE.length;
+    if (/[A-Z]/.test(pwd)) charsetSize += UPPERCASE.length;
+    if (/[0-9]/.test(pwd)) charsetSize += NUMBERS.length;
+    if (/[^A-Za-z0-9]/.test(pwd)) charsetSize += SYMBOLS.length;
+    
+    // Base entropy calculation
+    const entropy = Math.log2(Math.pow(charsetSize, pwd.length));
+    
+    // Common pattern reductions
+    const patterns = {
+      dictionaryWord: 30,       // Common word
+      repeating: 20,            // Repeated patterns
+      sequence: 25,             // Keyboard sequences
+      shortLength: pwd.length < 8 ? 40 - (pwd.length * 5) : 0,
+      yearSuffix: /(19|20)\d{2}$/.test(pwd) ? 15 : 0
+    };
+    
+    // Check for patterns
+    if (/^[a-zA-Z]+$/.test(pwd)) patterns.dictionaryWord = 40;
+    if (/(.)\1{2,}/.test(pwd)) patterns.repeating = 30;
+    if (/123|qwert|asdf/.test(pwd)) patterns.sequence = 35;
+    
+    const totalReduction = Object.values(patterns).reduce((a, b) => a + b, 0);
+    return Math.max(0, entropy - totalReduction);
   }, []);
 
-  const totalGuesses = useMemo(() => {
-    if (!password || !charsetSize) return 0;
-    return simulation.activeAttack === 'dictionary'
-      ? COMMON_PASSWORDS.length * DICTIONARY_PATTERNS.length
-      : Math.pow(charsetSize, password.length);
-  }, [simulation.activeAttack, charsetSize, password, COMMON_PASSWORDS.length, DICTIONARY_PATTERNS.length]);
+  // Determine if password is vulnerable to dictionary attack
+  const isDictionaryVulnerable = useCallback((pwd) => {
+    if (!pwd) return false;
+    
+    // Common password patterns
+    const commonPatterns = [
+      /^[a-z]+$/i,            // All letters
+      /^[a-z]+\d+$/i,          // Letters + numbers
+      /^\d+[a-z]+$/i,          // Numbers + letters
+      /^.{1,7}$/,              // Very short
+      /(password|qwerty|123)/i, // Common passwords
+      /(.)\1{2,}/,             // Repeating characters
+      /(19|20)\d{2}$/          // Year suffix
+    ];
+    
+    return commonPatterns.some(pattern => pattern.test(pwd));
+  }, []);
 
-  const generateDictionaryGuess = useCallback(() => {
-    if (Math.random() < 0.6) {
-      return COMMON_PASSWORDS[
-        Math.floor(Math.random() * COMMON_PASSWORDS.length)
-      ];
-    } else {
-      const pattern = DICTIONARY_PATTERNS[
-        Math.floor(Math.random() * DICTIONARY_PATTERNS.length)
-      ];
-      const base = pattern.base || 
-                  COMMON_PASSWORDS[
-                    Math.floor(Math.random() * COMMON_PASSWORDS.length)
-                  ];
-      return base + pattern.suffix;
-    }
-  }, [COMMON_PASSWORDS, DICTIONARY_PATTERNS]);
+  // Generate dictionary variations
+  const generateDictionaryVariations = useCallback((pwd) => {
+    if (!isDictionaryVulnerable(pwd)) return [];
+    
+    const variations = new Set();
+    const commonSuffixes = ['123', '!', '1', '1234', '2023', '2024'];
+    
+    // Base variations
+    variations.add(pwd.toLowerCase());
+    variations.add(pwd.toUpperCase());
+    variations.add(pwd.charAt(0).toUpperCase() + pwd.slice(1).toLowerCase());
+    
+    // Common substitutions
+    variations.add(pwd.replace(/a/gi, '@'));
+    variations.add(pwd.replace(/e/gi, '3'));
+    variations.add(pwd.replace(/i/gi, '1'));
+    variations.add(pwd.replace(/o/gi, '0'));
+    variations.add(pwd.replace(/s/gi, '$'));
+    
+    // Suffix variations
+    commonSuffixes.forEach(suffix => {
+      variations.add(pwd + suffix);
+      variations.add(pwd.toLowerCase() + suffix);
+    });
+    
+    return Array.from(variations);
+  }, [isDictionaryVulnerable]);
 
+  // Calculate attack times based on entropy and patterns
+  const calculateAttackTimes = useCallback((pwd) => {
+    if (!pwd) return { dictionary: Infinity, hybrid: Infinity, bruteForce: Infinity };
+    
+    const entropy = calculateEntropy(pwd);
+    const variations = generateDictionaryVariations(pwd);
+    const isWeak = isDictionaryVulnerable(pwd);
+    
+    // Attack speeds (guesses per second)
+    const speeds = {
+      dictionary: isWeak ? 1e7 : 0,      // 10M guesses/sec for dictionary
+      hybrid: isWeak ? 1e6 : 0,          // 1M guesses/sec for hybrid
+      bruteForce: 1e9                     // 1B guesses/sec for brute force
+    };
+    
+    // Calculate times
+    return {
+      dictionary: isWeak ? variations.length / speeds.dictionary : Infinity,
+      hybrid: isWeak ? (variations.length * 100) / speeds.hybrid : Infinity,
+      bruteForce: Math.pow(2, entropy) / speeds.bruteForce
+    };
+  }, [calculateEntropy, generateDictionaryVariations, isDictionaryVulnerable]);
+
+  const formatTime = useCallback((seconds) => {
+    if (seconds === Infinity) return "centuries";
+    if (seconds < 0.001) return "instantly";
+    if (seconds < 1) return `${(seconds * 1000).toFixed(0)} ms`;
+    if (seconds < 60) return `${seconds.toFixed(2)} sec`;
+    if (seconds < 3600) return `${(seconds/60).toFixed(1)} min`;
+    if (seconds < 86400) return `${(seconds/3600).toFixed(1)} hrs`;
+    if (seconds < 31536000) return `${(seconds/86400).toFixed(1)} days`;
+    if (seconds < 31536000 * 100) return `${(seconds/31536000).toFixed(1)} years`;
+    return "centuries";
+  }, []);
+
+  // Get estimated times
+  const estimatedTimes = useMemo(() => {
+    const { dictionary, hybrid, bruteForce } = calculateAttackTimes(password);
+    return {
+      dictionary: formatTime(dictionary),
+      hybrid: formatTime(hybrid),
+      bruteForce: formatTime(bruteForce)
+    };
+  }, [password, calculateAttackTimes, formatTime]);
+
+  // Generate a guess based on attack type
   const generateGuess = useCallback((type) => {
-    const pwdLength = password?.length || 8;
+    const variations = generateDictionaryVariations(password);
+    const isWeak = isDictionaryVulnerable(password);
+    
     switch(type) {
       case 'dictionary':
-        return generateDictionaryGuess();
+        return isWeak ? variations[Math.floor(Math.random() * variations.length)] : '';
       case 'hybrid':
-        return COMMON_PASSWORDS[
-          Math.floor(Math.random() * COMMON_PASSWORDS.length)
-        ] + Math.floor(Math.random() * 1000);
-      default:
-        return Array.from({length: pwdLength}, 
-          () => CHARACTER_SET[Math.floor(Math.random() * CHARACTER_SET.length)]).join('');
+        return isWeak ? variations[Math.floor(Math.random() * variations.length)] + 
+               Math.floor(Math.random() * 100) : '';
+      default: // Brute force
+        const charset = [
+          ...(/[a-z]/.test(password) ? LOWERCASE : ''),
+          ...(/[A-Z]/.test(password) ? UPPERCASE : ''),
+          ...(/[0-9]/.test(password) ? NUMBERS : ''),
+          ...(/[^A-Za-z0-9]/.test(password) ? SYMBOLS : '')
+        ].join('');
+        
+        return Array.from({length: password.length}, 
+          () => charset[Math.floor(Math.random() * charset.length)]).join('');
     }
-  }, [generateDictionaryGuess, COMMON_PASSWORDS, password?.length]);
+  }, [password, generateDictionaryVariations, isDictionaryVulnerable]);
 
+  // Run simulation
   const runSimulation = (type) => {
+    const variations = generateDictionaryVariations(password);
+    const isWeak = isDictionaryVulnerable(password);
+    
+    // Don't run ineffective attacks
+    if ((type === 'dictionary' || type === 'hybrid') && !isWeak) {
+      return;
+    }
+    
     setSimulation({
       isRunning: true,
-      speed: simulation.speed,
+      speed: 1,
       activeAttack: type,
       attempts: 0,
-      timeElapsed: 0,
       currentGuess: '',
+      timeElapsed: 0,
       isCracked: false
     });
   };
 
+  // Stop simulation
+  const stopSimulation = () => {
+    setSimulation(prev => ({ ...prev, isRunning: false }));
+  };
+
+  // Simulation effect
   useEffect(() => {
     let interval;
     
     if (simulation.isRunning && simulation.activeAttack) {
+      const startTime = Date.now();
+      
       interval = setInterval(() => {
         setSimulation(prev => {
-          if (!prev.isRunning) {
-            clearInterval(interval);
-            return prev;
-          }
-
-          const newAttempts = prev.attempts + ATTACK_SPEEDS[prev.activeAttack] * prev.speed / 10;
+          // Calculate attempts based on attack type and speed
+          const attempts = {
+            dictionary: 1e5 * prev.speed,
+            hybrid: 1e4 * prev.speed,
+            bruteForce: 1e3 * prev.speed
+          }[prev.activeAttack];
+          
+          const newAttempts = prev.attempts + attempts;
           const currentGuess = generateGuess(prev.activeAttack);
           const isCracked = currentGuess === password;
-
-          if (isCracked || newAttempts >= totalGuesses) {
+          const elapsed = (Date.now() - startTime) / 1000;
+          
+          if (isCracked || newAttempts >= Math.pow(2, calculateEntropy(password))) {
             clearInterval(interval);
             return { 
               ...prev, 
               isRunning: false,
               isCracked,
-              currentGuess: isCracked ? password : currentGuess
+              currentGuess: isCracked ? password : currentGuess,
+              timeElapsed: elapsed
             };
           }
 
           return {
             ...prev,
             attempts: newAttempts,
-            timeElapsed: prev.timeElapsed + 0.1,
+            timeElapsed: elapsed,
             currentGuess
           };
         });
@@ -135,131 +234,105 @@ const AttackSimulator = ({ password = 'defaultPassword', charsetSize = CHARACTER
     }
 
     return () => clearInterval(interval);
-  }, [simulation.isRunning, simulation.speed, simulation.activeAttack, 
-      password, generateGuess, ATTACK_SPEEDS, totalGuesses]);
-
-  const estimatedTimes = useMemo(() => {
-    if (!password || !charsetSize) return {
-      bruteForce: 'N/A',
-      dictionary: 'N/A',
-      hybrid: 'N/A'
-    };
-    
-    return {
-      bruteForce: formatTime(Math.pow(charsetSize, password.length) / ATTACK_SPEEDS.bruteForce),
-      dictionary: formatTime((COMMON_PASSWORDS.length * DICTIONARY_PATTERNS.length) / ATTACK_SPEEDS.dictionary),
-      hybrid: formatTime((COMMON_PASSWORDS.length * 1000) / ATTACK_SPEEDS.hybrid)
-    };
-  }, [charsetSize, password, COMMON_PASSWORDS.length, DICTIONARY_PATTERNS.length, ATTACK_SPEEDS, formatTime]);
+  }, [simulation.isRunning, simulation.activeAttack, simulation.speed, password, generateGuess, calculateEntropy]);
 
   return (
     <div className="attack-simulator">
-      <h3>Attack Simulation</h3>
-      
-      <div className="simulation-controls">
-        <button 
-          onClick={() => runSimulation('dictionary')}
-          disabled={simulation.isRunning}
-          className={simulation.activeAttack === 'dictionary' ? 'active' : ''}
-        >
-          Dictionary Attack
-        </button>
-        
-        <button 
-          onClick={() => runSimulation('bruteForce')}
-          disabled={simulation.isRunning}
-          className={simulation.activeAttack === 'bruteForce' ? 'active' : ''}
-        >
-          Brute Force
-        </button>
-        
-        <button 
-          onClick={() => runSimulation('hybrid')}
-          disabled={simulation.isRunning}
-          className={simulation.activeAttack === 'hybrid' ? 'active' : ''}
-        >
-          Hybrid Attack
-        </button>
+      <div className="controls">
+        <div className="attack-buttons">
+          <button 
+            onClick={() => runSimulation('dictionary')}
+            disabled={simulation.isRunning || !isDictionaryVulnerable(password)}
+            className={`btn ${simulation.activeAttack === 'dictionary' ? 'active' : ''}`}
+          >
+            Dictionary
+          </button>
+          <button 
+            onClick={() => runSimulation('bruteForce')}
+            disabled={simulation.isRunning}
+            className={`btn ${simulation.activeAttack === 'bruteForce' ? 'active' : ''}`}
+          >
+            Brute Force
+          </button>
+          <button 
+            onClick={() => runSimulation('hybrid')}
+            disabled={simulation.isRunning || !isDictionaryVulnerable(password)}
+            className={`btn ${simulation.activeAttack === 'hybrid' ? 'active' : ''}`}
+          >
+            Hybrid
+          </button>
+          {simulation.isRunning && (
+            <button onClick={stopSimulation} className="btn stop-btn">
+              Stop
+            </button>
+          )}
+        </div>
         
         <select
           value={simulation.speed}
-          onChange={(e) => setSimulation(prev => ({
-            ...prev, 
-            speed: Number(e.target.value)
-          }))}
+          onChange={(e) => setSimulation(prev => ({ ...prev, speed: Number(e.target.value) }))}
           disabled={simulation.isRunning}
+          className="speed-select"
         >
           <option value={1}>1x Speed</option>
           <option value={10}>10x Speed</option>
           <option value={100}>100x Speed</option>
         </select>
-        
-        {simulation.isRunning && (
-          <button 
-            onClick={() => setSimulation(prev => ({...prev, isRunning: false}))}
-            className="stop-button"
-          >
-            Stop
-          </button>
-        )}
       </div>
 
       {simulation.activeAttack && (
-        <div className="simulation-visualization">
+        <div className="simulation-results">
           <div className="progress-container">
+            <div className="progress-text">
+              {simulation.isCracked ? (
+                <span className="cracked">CRACKED!</span>
+              ) : (
+                `Attempts: ${Math.floor(simulation.attempts).toLocaleString()}`
+              )}
+            </div>
             <div 
               className={`progress-bar ${simulation.isCracked ? 'cracked' : ''}`}
               style={{ 
                 width: `${Math.min(
                   100, 
-                  (simulation.attempts / (
-                    simulation.activeAttack === 'dictionary' 
-                      ? COMMON_PASSWORDS.length * DICTIONARY_PATTERNS.length
-                      : Math.pow(charsetSize, password?.length || 8)
-                  )) * 100
+                  (simulation.attempts / Math.pow(2, calculateEntropy(password))) * 100
                 )}%` 
               }}
             />
-            <div className="progress-text">
-              {simulation.isCracked ? (
-                <span className="cracked-message">CRACKED!</span>
-              ) : (
-                `Attempts: ${Math.floor(simulation.attempts).toLocaleString()}`
-              )}
-            </div>
           </div>
           
-          <div className="guess-display">
-            <p>Current attempt: <code>{simulation.currentGuess}</code></p>
-            <p>Elapsed: {formatTime(simulation.timeElapsed)}</p>
-            {simulation.isCracked && (
-              <p className="warning">Your password was cracked!</p>
-            )}
+          <div className="guess-info">
+            <div className="guess">
+              <span>Current attempt: </span>
+              <strong>{simulation.currentGuess || 'N/A'}</strong>
+            </div>
+            <div className="time">
+              <span>Time elapsed: </span>
+              <strong>{formatTime(simulation.timeElapsed)}</strong>
+            </div>
           </div>
         </div>
       )}
 
       <div className="time-estimates">
-        <h4>Estimated Crack Times:</h4>
-        <ul>
-          <li>
-            <strong>Dictionary:</strong> {estimatedTimes.dictionary}
-          </li>
-          <li>
-            <strong>Brute Force:</strong> {estimatedTimes.bruteForce}
-          </li>
-          <li>
-            <strong>Hybrid:</strong> {estimatedTimes.hybrid}
-          </li>
-        </ul>
+        <h4>Estimated Crack Times</h4>
+        <div className="estimate-grid">
+          <div className="estimate">
+            <span>Dictionary:</span>
+            <span className="time-value">{estimatedTimes.dictionary}</span>
+          </div>
+          <div className="estimate">
+            <span>Brute Force:</span>
+            <span className="time-value">{estimatedTimes.bruteForce}</span>
+          </div>
+          <div className="estimate">
+            <span>Hybrid:</span>
+            <span className="time-value">{estimatedTimes.hybrid}</span>
+          </div>
+        </div>
       </div>
     </div>
   );
-};
-
-AttackSimulator.defaultProps = {
-  password: 'defaultPassword',
-  charsetSize: CHARACTER_SET.length
 };
 
 export default AttackSimulator;
