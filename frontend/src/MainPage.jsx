@@ -313,6 +313,149 @@ const MainPage = ({ password, setPassword, showPassword, setShowPassword }) => {
     return review;
   }, []);
 
+  const calculateCrackTime = useCallback((pwd, mlPredictions = null) => {
+    // Updated hardware capabilities with more realistic modern speeds
+    const HARDWARE_SPEEDS = {
+      online_throttled: 1000,                    // 1k guesses/second (throttled online attack)
+      online_unthrottled: 100_000,              // 100k guesses/second (unthrottled online attack)
+      offline_slow_hash: 10_000_000,            // 10M guesses/second (bcrypt/PBKDF2)
+      offline_fast_hash: 10_000_000_000,        // 10B guesses/second (SHA1/MD5)
+      offline_gpu_farm: 1_000_000_000_000,      // 1T guesses/second (GPU cluster)
+      quantum: 10_000_000_000_000              // 10T guesses/second (future quantum)
+    };
+
+    // Calculate base entropy and character space
+    const charTypes = {
+      lower: /[a-z]/.test(pwd),
+      upper: /[A-Z]/.test(pwd),
+      digits: /[0-9]/.test(pwd),
+      special: /[^A-Za-z0-9]/.test(pwd)
+    };
+
+    let charsetSize = 0;
+    if (charTypes.lower) charsetSize += 26;
+    if (charTypes.upper) charsetSize += 26;
+    if (charTypes.digits) charsetSize += 10;
+    if (charTypes.special) charsetSize += 32;
+
+    // Calculate base entropy with adjusted formula
+    const baseEntropy = Math.log2(Math.pow(charsetSize || 1, pwd.length));
+
+    // Enhanced pattern-based penalties
+    let entropyPenalty = 0;
+    const patterns = {
+      repeating: /(.)\1{2,}/,
+      sequential_nums: /(?:012|123|234|345|456|567|678|789|987|876|765|654|543|432|321|210)/,
+      sequential_chars: /(?:abc|bcd|cde|def|efg|fgh|ghi|hij|ijk|jkl|klm|lmn|nop|opq|pqr|rst|stu|tuv|uvw|vwx|xyz)/i,
+      keyboard_patterns: /(?:qwerty|asdfgh|zxcvbn|qazwsx|qweasd)/i,
+      common_words: /(?:password|admin|welcome|login|user|guest|123456|qwerty)/i,
+      dates: /(?:19\d{2}|20\d{2}|0[1-9]|1[0-2])(?:0[1-9]|[12]\d|3[01])/
+    };
+
+    // Increased pattern penalties for more realistic estimates
+    Object.entries(patterns).forEach(([type, regex]) => {
+      if (regex.test(pwd)) {
+        switch (type) {
+          case 'repeating':
+            entropyPenalty += 30;
+            break;
+          case 'sequential_nums':
+          case 'sequential_chars':
+            entropyPenalty += 35;
+            break;
+          case 'keyboard_patterns':
+            entropyPenalty += 40;
+            break;
+          case 'common_words':
+            entropyPenalty += 45;
+            break;
+          case 'dates':
+            entropyPenalty += 25;
+            break;
+        }
+      }
+    });
+
+    // ML-based adjustments with more aggressive penalties
+    let mlAdjustment = 1;
+    if (mlPredictions) {
+      mlAdjustment = mlPredictions.confidence * (
+        mlPredictions.score >= 8 ? 1.1 :  // Strong passwords get smaller boost
+        mlPredictions.score >= 6 ? 1.0 :  // Moderate passwords no change
+        mlPredictions.score >= 4 ? 0.8 :  // Average passwords bigger penalty
+        mlPredictions.score >= 2 ? 0.6 :  // Weak passwords significant penalty
+        0.4                               // Very weak passwords severe penalty
+      );
+    }
+
+    // Calculate effective entropy with more realistic adjustments
+    const effectiveEntropy = Math.max(1, (baseEntropy - entropyPenalty) * mlAdjustment);
+
+    // Dictionary attack optimization factor
+    const dictionaryFactor = /^[a-zA-Z]+$/.test(pwd) ? 100 : 1;
+
+    // Calculate crack times for different attack scenarios
+    const crackTimes = {};
+    Object.entries(HARDWARE_SPEEDS).forEach(([method, speed]) => {
+      // Adjust combinations based on attack type
+      let combinations = Math.pow(2, effectiveEntropy);
+      
+      // Apply dictionary optimization for word-like passwords
+      if (method.includes('offline')) {
+        combinations = combinations / dictionaryFactor;
+      }
+      
+      // Calculate average case scenario (divide by 2)
+      const seconds = combinations / (2 * speed);
+
+      crackTimes[method] = {
+        seconds,
+        time_readable: formatCrackTime(seconds),
+        description: getMethodDescription(method)
+      };
+    });
+
+    return crackTimes;
+  }, []);
+
+  const formatCrackTime = (seconds) => {
+    // Updated time thresholds for more granular and realistic display
+    const timeUnits = [
+      { unit: 'years', value: 31536000 },
+      { unit: 'months', value: 2592000 },
+      { unit: 'weeks', value: 604800 },
+      { unit: 'days', value: 86400 },
+      { unit: 'hours', value: 3600 },
+      { unit: 'minutes', value: 60 },
+      { unit: 'seconds', value: 1 }
+    ];
+
+    if (seconds < 0.001) return 'instantly';
+    if (seconds < 1) return 'less than a second';
+    
+    for (const { unit, value } of timeUnits) {
+      if (seconds >= value) {
+        const count = seconds / value;
+        // Only show one decimal place for better readability
+        return `${count.toFixed(1)} ${unit}`;
+      }
+    }
+    
+    return 'instantly';
+  };
+
+  const getMethodDescription = (method) => {
+    const descriptions = {
+      online_throttled: 'Rate-limited online attack (1k/s)',
+      online_unthrottled: 'Unrestricted online attack (100k/s)',
+      offline_slow_hash: 'Offline attack with slow hash (10M/s)',
+      offline_fast_hash: 'Offline attack with fast hash (10B/s)',
+      offline_gpu_farm: 'Massive GPU cluster attack (1T/s)',
+      quantum: 'Theoretical quantum computer attack (10T/s)'
+    };
+    return descriptions[method] || method;
+  };
+
   const calculatePasswordMetrics = useCallback((pwd) => {
     if (!pwd) return {
       strength: 0,
@@ -323,43 +466,29 @@ const MainPage = ({ password, setPassword, showPassword, setShowPassword }) => {
       weaknesses: []
     };
 
-    const hasLower = /[a-z]/.test(pwd);
-    const hasUpper = /[A-Z]/.test(pwd);
-    const hasNumber = /[0-9]/.test(pwd);
-    const hasSymbol = /[^A-Za-z0-9]/.test(pwd);
+    // Get ML predictions if available
+    const mlPredictions = mlResults?.score ? {
+      score: mlResults.score,
+      confidence: mlResults.confidence || 0.85
+    } : null;
+
+    // Calculate crack times using the new function
+    const crackTimes = calculateCrackTime(pwd, mlPredictions);
     
-    let charsetSize = 0;
-    if (hasLower) charsetSize += 26;
-    if (hasUpper) charsetSize += 26;
-    if (hasNumber) charsetSize += 10;
-    if (hasSymbol) charsetSize += 32;
+    // Find the fastest crack time for display
+    const fastestCrack = Object.values(crackTimes)
+      .reduce((fastest, current) => 
+        current.seconds < fastest.seconds ? current : fastest
+      );
 
-    const entropy = Math.log2(charsetSize) * pwd.length;
-
-    let entropyPenalty = 0;
-    if (/(.)\1{2,}/.test(pwd)) entropyPenalty += 20;
-    if (/[a-z]{4,}/.test(pwd)) entropyPenalty += 15;
-    if (/123|abc|qwerty/.test(pwd)) entropyPenalty += 30;
-    if (pwd.toLowerCase().includes('barclays')) entropyPenalty += 40;
-
-    const effectiveEntropy = Math.max(1, entropy - entropyPenalty);
-    const seconds = Math.pow(2, effectiveEntropy) / 1e12;
-    
-    const formatTime = (sec) => {
-      if (sec < 1) return "instantly";
-      if (sec < 60) return `${sec.toFixed(2)} seconds`;
-      if (sec < 3600) return `${(sec/60).toFixed(2)} minutes`;
-      if (sec < 86400) return `${(sec/3600).toFixed(2)} hours`;
-      if (sec < 31536000) return `${(sec/86400).toFixed(2)} days`;
-      return `${(sec/31536000).toFixed(2)} years`;
-    };
-
+    // Calculate strength score based on the fastest crack time
     let score = 0;
-    if (effectiveEntropy > 100) score = 4;
-    else if (effectiveEntropy > 60) score = 3;
-    else if (effectiveEntropy > 30) score = 2;
-    else if (effectiveEntropy > 10) score = 1;
-    
+    if (fastestCrack.seconds >= 31536000 * 100) score = 4; // Centuries
+    else if (fastestCrack.seconds >= 31536000) score = 3;  // Years
+    else if (fastestCrack.seconds >= 86400) score = 2;     // Days
+    else if (fastestCrack.seconds >= 3600) score = 1;      // Hours
+    else score = 0;                                        // Quick to crack
+
     const labels = [
       'Very Weak',
       'Weak',
@@ -371,12 +500,14 @@ const MainPage = ({ password, setPassword, showPassword, setShowPassword }) => {
     return {
       strength: score,
       label: labels[score],
-      crackTime: formatTime(seconds),
-      entropyScore: Math.min(100, Math.floor(effectiveEntropy * 1.5)),
+      crackTime: fastestCrack.time_readable,
+      crackTimes: crackTimes,
+      entropyScore: Math.min(100, Math.floor(fastestCrack.seconds > 0 ? 
+        Math.log2(fastestCrack.seconds) * 10 : 0)),
       vulnerabilities: calculateVulnerabilities(pwd),
       weaknesses: generateWeaknessReview(pwd)
     };
-  }, [calculateVulnerabilities, generateWeaknessReview]);
+  }, [calculateCrackTime, calculateVulnerabilities, generateWeaknessReview, mlResults]);
 
   const generatePasswordFromSuggestion = (currentPassword, suggestion) => {
     if (!currentPassword) return '';
@@ -546,11 +677,17 @@ const MainPage = ({ password, setPassword, showPassword, setShowPassword }) => {
       // Calculate our own strength score
       const strengthScore = calculatePasswordStrength(password);
       
+      // Calculate crack times using our unified method
+      const crackTimes = calculateCrackTime(password, {
+        score: strengthScore,
+        confidence: data?.confidence || 0.85
+      });
+
       // Transform the data to match our UI expectations
       const processedData = {
         score: strengthScore,
         category: getStrengthCategory(strengthScore),
-        confidence: data?.confidence || 0,
+        confidence: data?.confidence || 0.85,
         details: {
           length: data?.features?.length || password.length,
           entropy: data?.features?.entropy || calculateEntropy(password),
@@ -563,7 +700,7 @@ const MainPage = ({ password, setPassword, showPassword, setShowPassword }) => {
               .filter(regex => regex.test(password)).length
           }
         },
-        crackTimes: data?.crack_times || {},
+        crackTimes: crackTimes,
         suggestions: data?.suggestions || generateSuggestions(password, strengthScore)
       };
 
@@ -574,6 +711,11 @@ const MainPage = ({ password, setPassword, showPassword, setShowPassword }) => {
       console.error('ML Analysis error:', error);
       // Even on error, calculate and show local strength analysis
       const strengthScore = calculatePasswordStrength(password);
+      const crackTimes = calculateCrackTime(password, {
+        score: strengthScore,
+        confidence: 0.85
+      });
+
       setMLResults({
         error: true,
         message: error.message || 'Unable to analyze password. Please try again.',
@@ -592,7 +734,7 @@ const MainPage = ({ password, setPassword, showPassword, setShowPassword }) => {
               .filter(regex => regex.test(password)).length
           }
         },
-        crackTimes: {},
+        crackTimes: crackTimes,
         suggestions: generateSuggestions(password, strengthScore)
       });
       setShowMLModal(true);
@@ -1142,11 +1284,18 @@ const MainPage = ({ password, setPassword, showPassword, setShowPassword }) => {
                   {Object.entries(mlResults.crackTimes).map(([method, data]) => (
                     <div key={method} className="crack-time-card">
                       <div className="attack-type">
-                        <span className="method">{method}</span>
-                        <span className="description">{data.description}</span>
+                        <span className="method">{data.description}</span>
                       </div>
                       <div className="time-estimate">
                         <span className="time">{data.time_readable}</span>
+                        <div className="severity-indicator">
+                          <div className={`severity-dot ${
+                            data.seconds >= 31536000 * 100 ? 'low' :
+                            data.seconds >= 31536000 ? 'medium' :
+                            data.seconds >= 86400 ? 'high' :
+                            'critical'
+                          }`}></div>
+                        </div>
                       </div>
                     </div>
                   ))}

@@ -618,3 +618,150 @@
 .severity-indicator.low .severity-text {
     color: #2ecc71;
 }
+
+.floating-fix-btn {
+    position: fixed;
+    bottom: 40px;
+    right: 40px;
+    background: linear-gradient(135deg, #4a89dc 0%, #2c3e50 100%);
+    color: white;
+    border: none;
+    padding: 16px 32px;
+    border-radius: 50px;
+    font-size: 1.1rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    z-index: 1000;
+}
+
+.floating-fix-btn:hover {
+    transform: translateY(-2px) scale(1.02);
+    box-shadow: 0 6px 16px rgba(0, 0, 0, 0.2);
+    background: linear-gradient(135deg, #5a99ec 0%, #3c4e60 100%);
+}
+
+.floating-fix-btn:active {
+    transform: translateY(0) scale(0.98);
+}
+
+.floating-fix-btn .icon {
+    font-size: 1.2rem;
+}
+
+.floating-fix-btn:disabled {
+    background: #ccc;
+    cursor: not-allowed;
+    transform: none;
+    box-shadow: none;
+}
+
+@media (max-width: 768px) {
+    .floating-fix-btn {
+        bottom: 20px;
+        right: 20px;
+        padding: 14px 28px;
+        font-size: 1rem;
+    }
+}
+
+.fix-btn-floating {
+    position: fixed;
+    right: 40px;
+    bottom: 40px;
+    background: #00aaff;
+    color: white;
+    border: none;
+    padding: 15px 25px;
+    border-radius: 50px;
+    font-size: 1rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    box-shadow: 0 4px 12px rgba(0, 170, 255, 0.3);
+    z-index: 1000;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.fix-btn-floating:hover {
+    background: #0088cc;
+    transform: translateY(-2px);
+    box-shadow: 0 6px 16px rgba(0, 170, 255, 0.4);
+}
+
+.fix-btn-floating:disabled {
+    background: #cccccc;
+    cursor: not-allowed;
+    box-shadow: none;
+    transform: none;
+}
+
+.fix-btn-floating::before {
+    content: "🔧";
+    font-size: 1.2rem;
+}
+
+@media (max-width: 768px) {
+    .fix-btn-floating {
+        right: 20px;
+        bottom: 20px;
+        padding: 12px 20px;
+        font-size: 0.9rem;
+    }
+}
+
+.attack-methods {
+    margin-top: 10px;
+    font-size: 0.85rem;
+    border-top: 1px solid rgba(0, 0, 0, 0.1);
+    padding-top: 8px;
+}
+
+.attack-method {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin: 4px 0;
+    color: #666;
+}
+
+.method-name {
+    text-transform: capitalize;
+    font-weight: 500;
+}
+
+.method-time {
+    color: #1a73e8;
+    font-weight: 500;
+}
+
+.metric-card {
+    position: relative;
+    overflow: visible;
+    min-height: 100px;
+    transition: all 0.3s ease;
+}
+
+.metric-card:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+}
+
+.metric-value {
+    font-size: 1.5rem;
+    font-weight: bold;
+    color: #2c3e50;
+    margin-bottom: 5px;
+}
+
+.metric-label {
+    color: #666;
+    font-size: 0.9rem;
+    margin-bottom: 10px;
+}
