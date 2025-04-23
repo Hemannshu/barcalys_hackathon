@@ -100,15 +100,28 @@ const SignupPage = () => {
         displayName: formData.fullName
       });
 
-      // Store user data
+      // Store user data in localStorage
       localStorage.setItem('token', user.refreshToken);
       localStorage.setItem('userId', user.uid);
       localStorage.setItem('email', formData.email);
+      localStorage.setItem('displayName', formData.fullName);
 
-      // Redirect to face authentication
+      // Redirect to face authentication HTML page
       window.location.href = '/face-auth.html?action=enroll';
     } catch (err) {
-      setError(err.message);
+      console.error('Signup error:', err);
+      let errorMessage = err.message;
+      
+      // Handle specific Firebase errors
+      if (err.code === 'auth/email-already-in-use') {
+        errorMessage = 'This email is already registered. Please try logging in.';
+      } else if (err.code === 'auth/network-request-failed') {
+        errorMessage = 'Network error. Please check your internet connection and try again.';
+      } else if (err.code === 'auth/weak-password') {
+        errorMessage = 'Password is too weak. Please use a stronger password.';
+      }
+      
+      setError(errorMessage);
       setIsLoading(false);
     }
   };

@@ -142,6 +142,20 @@
         
         function enrollNewUser() {
             actionButton.disabled = true;
+            console.log('Starting face registration process...');
+            
+            // Check internet connectivity before proceeding
+            if (!navigator.onLine) {
+                statusDiv.innerHTML = `
+                    <div class="error">
+                        <h3>No Internet Connection</h3>
+                        <p>Please check your internet connection and try again.</p>
+                    </div>
+                `;
+                actionButton.disabled = false;
+                return;
+            }
+            
             faceio.enroll({
                 "locale": "auto",
                 "payload": {
@@ -149,6 +163,9 @@
                     "email": email
                 }
             }).then(userInfo => {
+                console.log('Face registration successful, updating backend...');
+                console.log('User Info:', userInfo);
+                
                 // Update the user's facial ID in the backend
                 return fetch('http://localhost:5000/api/auth/update-facial-id', {
                     method: 'POST',
@@ -161,30 +178,99 @@
                         facialId: userInfo.facialId
                     })
                 }).then(response => {
+                    console.log('Backend response status:', response.status);
                     if (!response.ok) {
-                        throw new Error('Failed to update facial ID');
+                        if (response.status === 405) {
+                            console.log('Method not allowed, redirecting to login...');
+                            window.location.href = '/login';
+                            return;
+                        }
+                        throw new Error(`Failed to update facial ID: ${response.status}`);
                     }
                     return userInfo;
                 });
             }).then(userInfo => {
-                statusDiv.innerHTML = `
-                    <div class="success">
-                        <h3>Registration Successful!</h3>
-                        <p>Your face has been registered successfully.</p>
-                        <p>Redirecting to dashboard...</p>
-                    </div>
-                `;
-                setTimeout(() => {
-                    window.location.href = '/dashboard';
-                }, 2000);
+                if (userInfo) {
+                    console.log('Registration process completed successfully');
+                    statusDiv.innerHTML = `
+                        <div class="success">
+                            <h3>Registration Successful!</h3>
+                            <p>Your face has been registered successfully.</p>
+                            <p>Redirecting to login page...</p>
+                        </div>
+                    `;
+                    setTimeout(() => {
+                        window.location.href = '/login';
+                    }, 2000);
+                }
             }).catch(errCode => {
+                console.error('Face registration error:', errCode);
                 actionButton.disabled = false;
+                
+                // Check for specific FaceIO error codes
+                if (errCode.toString() === "7") {
+                    statusDiv.innerHTML = `
+                        <div class="warning">
+                            <h3>Network Connection Error</h3>
+                            <p>Please check your internet connection and try again.</p>
+                            <p>If the problem persists, try:</p>
+                            <ul style="text-align: left; margin-top: 10px;">
+                                <li>Refreshing the page</li>
+                                <li>Using a different browser</li>
+                                <li>Clearing your browser cache</li>
+                            </ul>
+                        </div>
+                    `;
+                    return;
+                }
+                
+                if (errCode.toString() === "PERMISSION_REFUSED") {
+                    statusDiv.innerHTML = `
+                        <div class="error">
+                            <h3>Camera Access Required</h3>
+                            <p>Please allow camera access in your browser settings and try again.</p>
+                            <p>Redirecting to login...</p>
+                        </div>
+                    `;
+                    setTimeout(() => {
+                        window.location.href = '/login';
+                    }, 3000);
+                    return;
+                }
+                
+                if (errCode.toString() === "NO_FACES_DETECTED") {
+                    statusDiv.innerHTML = `
+                        <div class="warning">
+                            <h3>No Face Detected</h3>
+                            <p>Please ensure your face is clearly visible in the camera.</p>
+                            <p>Make sure you are in a well-lit area and your face is centered.</p>
+                        </div>
+                    `;
+                    return;
+                }
+                
+                if (errCode.toString() === "FACE_DUPLICATION") {
+                    statusDiv.innerHTML = `
+                        <div class="error">
+                            <h3>Face Already Registered</h3>
+                            <p>This face is already registered in our system.</p>
+                            <p>Redirecting to login...</p>
+                        </div>
+                    `;
+                    setTimeout(() => {
+                        window.location.href = '/login';
+                    }, 3000);
+                    return;
+                }
+                
                 handleError(errCode);
             });
         }
         
         function authenticateUser() {
             actionButton.disabled = true;
+            let redirecting = false;
+
             faceio.authenticate({
                 "locale": "auto"
             }).then(userData => {
@@ -201,23 +287,34 @@
                     })
                 }).then(response => {
                     if (!response.ok) {
+                        if (response.status === 405) {
+                            redirecting = true;
+                            window.location.replace('/password-health');
+                            return Promise.reject('Redirecting to password health');
+                        }
                         throw new Error('Face verification failed');
                     }
                     return userData;
                 });
             }).then(userData => {
-                statusDiv.innerHTML = `
-                    <div class="success">
-                        <h3>Authentication Successful!</h3>
-                        <p>Welcome back! Redirecting to dashboard...</p>
-                    </div>
-                `;
-                setTimeout(() => {
-                    window.location.href = '/dashboard';
-                }, 2000);
+                if (!redirecting && userData) {
+                    statusDiv.innerHTML = `
+                        <div class="success">
+                            <h3>Authentication Successful!</h3>
+                            <p>Welcome back! Redirecting to dashboard...</p>
+                        </div>
+                    `;
+                    setTimeout(() => {
+                        window.location.replace('/dashboard');
+                    }, 2000);
+                }
             }).catch(errCode => {
-                actionButton.disabled = false;
-                handleError(errCode);
+                if (!redirecting) {
+                    actionButton.disabled = false;
+                    if (errCode !== 'Redirecting to password health') {
+                        handleError(errCode);
+                    }
+                }
             });
         }
         
@@ -226,6 +323,10 @@
             let errorClass = "error";
             
             switch (errCode.toString()) {
+                case "7":
+                    errorMessage = "Network connection error. Please check your internet connection and try again.";
+                    errorClass = "warning";
+                    break;
                 case "PERMISSION_REFUSED":
                     errorMessage = "Camera access was denied. Please allow camera access and try again.";
                     break;
@@ -257,6 +358,14 @@
                 <div class="${errorClass}">
                     <h3>Error</h3>
                     <p>${errorMessage}</p>
+                    ${errCode.toString() === "7" ? 
+                        '<p>If the problem persists, please try the following:</p>' +
+                        '<ul style="text-align: left; margin-top: 10px;">' +
+                        '<li>Check your internet connection</li>' +
+                        '<li>Refresh the page and try again</li>' +
+                        '<li>Try using a different browser</li>' +
+                        '<li>Clear your browser cache and cookies</li>' +
+                        '</ul>' : ''}
                 </div>
             `;
         }
