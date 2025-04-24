@@ -1,0 +1,66 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Icon Generator</title>
+</head>
+<body>
+    <!-- Original SVG -->
+    <svg id="originalSvg" width="128" height="128" viewBox="0 0 128 128" xmlns="http://www.w3.org/2000/svg">
+        <!-- Background circle -->
+        <circle cx="64" cy="64" r="60" fill="#2196F3"/>
+        
+        <!-- Lock body -->
+        <rect x="38" y="58" width="52" height="42" rx="6" fill="white"/>
+        
+        <!-- Lock shackle -->
+        <path d="M 48 58 L 48 42 C 48 30 80 30 80 42 L 80 58" 
+              stroke="white" 
+              stroke-width="12" 
+              fill="none" 
+              stroke-linecap="round"/>
+        
+        <!-- Keyhole -->
+        <circle cx="64" cy="75" r="8" fill="#2196F3"/>
+        <rect x="62" y="75" width="4" height="12" fill="#2196F3"/>
+    </svg>
+
+    <!-- Canvases for different sizes -->
+    <canvas id="canvas16" width="16" height="16"></canvas>
+    <canvas id="canvas48" width="48" height="48"></canvas>
+    <canvas id="canvas128" width="128" height="128"></canvas>
+
+    <div id="output"></div>
+
+    <script>
+        function generateIcons() {
+            const sizes = [16, 48, 128];
+            const svgString = document.getElementById('originalSvg').outerHTML;
+            const output = document.getElementById('output');
+
+            sizes.forEach(size => {
+                const canvas = document.getElementById(`canvas${size}`);
+                const ctx = canvas.getContext('2d');
+                const img = new Image();
+                
+                img.onload = function() {
+                    ctx.drawImage(img, 0, 0, size, size);
+                    const dataUrl = canvas.toDataURL('image/png');
+                    
+                    // Create download link
+                    const link = document.createElement('a');
+                    link.download = `icon${size}.png`;
+                    link.href = dataUrl;
+                    link.textContent = `Download ${size}x${size} icon`;
+                    output.appendChild(link);
+                    output.appendChild(document.createElement('br'));
+                };
+
+                img.src = 'data:image/svg+xml;base64,' + btoa(svgString);
+            });
+        }
+
+        // Generate icons when page loads
+        window.onload = generateIcons;
+    </script>
+</body>
+</html> 
