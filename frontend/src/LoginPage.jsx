@@ -3,6 +3,7 @@ import { useNavigate, Link } from 'react-router-dom';
 import { signInWithEmailAndPassword, sendPasswordResetEmail } from 'firebase/auth';
 import { auth } from './firebase';
 import './LoginPage.css';
+import logo from './images/BCS-745d30bf.png';
 
 const LoginPage = () => {
   const navigate = useNavigate();
@@ -75,6 +76,29 @@ const LoginPage = () => {
 
   return (
     <div className="login-page">
+      <header className="app-header">
+        <div className="header-content">
+          <div className="logo-container">
+            <img src={logo} alt="Barclays" className="app-logo" />
+            <h1>Barclays</h1>
+          </div>
+          <div className="header-buttons">
+            <button 
+              className="home-btn"
+              onClick={() => navigate('/')}
+            >
+              Home
+            </button>
+            <button 
+              className="signup-btn"
+              onClick={() => navigate('/signup')}
+            >
+              Sign Up
+            </button>
+          </div>
+        </div>
+      </header>
+
       <div className="login-container">
         <div className="login-header">
           <div className="logo-placeholder">

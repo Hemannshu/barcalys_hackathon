@@ -1,8 +1,8 @@
 import { useState, useCallback, useEffect, useMemo } from 'react';
 import './App.css';
-import './MainPage.css';
+import './MainPage.jsx';
 import AttackSimulator from './AttackSimulator';
-import logo from './images/image.png';
+import logo from './images/BCS-745d30bf.png';
 import { useNavigate } from 'react-router-dom';
 import Chatbot from './Chatbot';
 import Mainpage from './MainPage.css';
@@ -798,10 +798,36 @@ const MainPage = ({ password, setPassword, showPassword, setShowPassword }) => {
 
   return (
     <div className="app">
-      <header className="header">
-        <img src={logo} alt="Barclays" className="logo" />
-        <h2>Password Strength Analyzer</h2>
+      <header className="app-header">
+        <div className="header-content">
+          <div className="logo-container">
+            <img src={logo} alt="Barclays" className="app-logo" />
+            <h1>Barclays</h1>
+          </div>
+          <div className="header-buttons">
+            <button 
+              className="login-btn"
+              onClick={() => navigate('/login')}
+            >
+              Login
+            </button>
+            <button 
+              className="signup-btn"
+              onClick={() => navigate('/signup')}
+            >
+              Sign Up
+            </button>
+          </div>
+        </div>
       </header>
+
+      <div className="hero-section">
+        <div className="tagline-container">
+          <h2 className="main-tagline">Breach.AI</h2>
+          <p className="sub-tagline">Fortify Before They Breach</p>
+        </div>
+        <h3 className="app-title">Password Strength Analyzer</h3>
+      </div>
 
       <div className="password-checker">
         <div className="input-group">
@@ -840,21 +866,23 @@ const MainPage = ({ password, setPassword, showPassword, setShowPassword }) => {
             Analyze Password
           </button>
           
-          <button
-            onClick={handleGenerateSuggestions}
-            className="fix-btn"
-            disabled={!password}
-          >
-            Fix It AI
-          </button>
+          <div className="button-row">
+            <button
+              onClick={handleGenerateSuggestions}
+              className="fix-btn"
+              disabled={!password}
+            >
+              Fix It AI
+            </button>
 
-          <button
-            onClick={handleMLAnalysis}
-            className="ml-analysis-btn"
-            disabled={!password || isMLLoading}
-          >
-            Advanced ML Analysis
-          </button>
+            <button
+              onClick={handleMLAnalysis}
+              className="ml-analysis-btn"
+              disabled={!password || isMLLoading}
+            >
+              Advanced ML Analysis
+            </button>
+          </div>
         </div>
 
         {showSuggestions && (

@@ -7,6 +7,7 @@ import {
   RecaptchaVerifier
 } from 'firebase/auth';
 import './SignupPage.css';
+import logo from './images/BCS-745d30bf.png';
 
 const SignupPage = () => {
   const navigate = useNavigate();
@@ -128,6 +129,29 @@ const SignupPage = () => {
 
   return (
     <div className="signup-page">
+      <header className="app-header">
+        <div className="header-content">
+          <div className="logo-container">
+            <img src={logo} alt="Barclays" className="app-logo" />
+            <h1>Barclays</h1>
+          </div>
+          <div className="header-buttons">
+            <button 
+              className="home-btn"
+              onClick={() => navigate('/')}
+            >
+              Home
+            </button>
+            <button 
+              className="login-btn"
+              onClick={() => navigate('/login')}
+            >
+              Login
+            </button>
+          </div>
+        </div>
+      </header>
+
       <div className="signup-container">
         <div className="signup-header">
           <div className="logo-placeholder">
