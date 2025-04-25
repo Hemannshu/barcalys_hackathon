@@ -9,7 +9,6 @@ import Dashboard from './Dashboard';
 import VulnerabilityAnalysisPage from './VulnerabilityAnalysisPage';
 import LoginPage from './LoginPage';
 import SignupPage from './SignupPage';
-import FaceAuthPage from './FaceAuthPage';
 
 function App() {
   const [password, setPassword] = useState('');
@@ -24,6 +23,19 @@ function App() {
   const currentPath = window.location.pathname;
   const shouldShowAnimation = showAnimation && currentPath === '/';
 
+  // Check if user is authenticated
+  const isAuthenticated = () => {
+    return localStorage.getItem('token') !== null;
+  };
+
+  // Protected Route component
+  const ProtectedRoute = ({ children }) => {
+    if (!isAuthenticated()) {
+      return <Navigate to="/login" />;
+    }
+    return children;
+  };
+
   return (
     <Router>
       <div className="app-container">
@@ -34,6 +46,7 @@ function App() {
             <Sidebar />
             <main className="main-content">
               <Routes>
+                {/* Public Routes */}
                 <Route 
                   path="/" 
                   element={
@@ -45,15 +58,29 @@ function App() {
                     />
                   } 
                 />
-                <Route 
-                  path="/password-health" 
-                  element={<PasswordHealthDashboard />} 
-                />
-                <Route path="/dashboard" element={<Dashboard />} />
-                <Route path="/vulnerability-analysis" element={<VulnerabilityAnalysisPage />} />
                 <Route path="/login" element={<LoginPage />} />
                 <Route path="/signup" element={<SignupPage />} />
-                <Route path="/face-auth" element={<FaceAuthPage />} />
+                <Route path="/vulnerability-analysis" element={<VulnerabilityAnalysisPage />} />
+
+                {/* Protected Routes */}
+                <Route 
+                  path="/password-health" 
+                  element={
+                    <ProtectedRoute>
+                      <PasswordHealthDashboard />
+                    </ProtectedRoute>
+                  } 
+                />
+                <Route 
+                  path="/dashboard" 
+                  element={
+                    <ProtectedRoute>
+                      <Dashboard />
+                    </ProtectedRoute>
+                  } 
+                />
+                
+                {/* Fallback route */}
                 <Route path="*" element={<Navigate to="/" />} />
               </Routes>
             </main>

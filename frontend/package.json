@@ -11,11 +11,11 @@
     "crypto-js": "^4.2.0",
     "firebase": "^11.6.0",
     "hibp": "^15.0.1",
-    "react": "^19.1.0",
+    "react": "^18.2.0",
     "react-chartjs-2": "^5.3.0",
-    "react-dom": "^19.1.0",
+    "react-dom": "^18.2.0",
     "react-router-dom": "^7.5.2",
-    "react-scripts": "5.0.1",
+    "react-scripts": "^5.0.1",
     "web-vitals": "^2.1.4",
     "zxcvbn": "^4.4.2"
   },
@@ -44,7 +44,8 @@
     ]
   },
   "devDependencies": {
-    "@babel/plugin-proposal-private-property-in-object": "^7.21.11"
+    "@babel/plugin-proposal-private-property-in-object": "^7.21.11",
+    "html-webpack-plugin": "^5.5.3"
   },
   "proxy": "http://localhost:5000"
 }

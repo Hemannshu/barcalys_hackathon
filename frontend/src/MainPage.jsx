@@ -7,6 +7,28 @@ import { useNavigate } from 'react-router-dom';
 import Chatbot from './Chatbot';
 import Mainpage from './MainPage.css';
 
+// Helper function to safely parse JSON
+const safeJSONParse = (data, fallback = null) => {
+  if (!data) return fallback;
+  try {
+    return JSON.parse(data);
+  } catch (error) {
+    console.error('Error parsing JSON:', error);
+    return fallback;
+  }
+};
+
+// Helper function to safely get localStorage item
+const getLocalStorageItem = (key, fallback = null) => {
+  try {
+    const item = localStorage.getItem(key);
+    return item ? safeJSONParse(item, fallback) : fallback;
+  } catch (error) {
+    console.error(`Error accessing localStorage for key ${key}:`, error);
+    return fallback;
+  }
+};
+
 // Helper function to determine strength class based on score
 const getStrengthClass = (score) => {
   if (score >= 9) return 'strength-10';
@@ -330,28 +352,37 @@ const MainPage = ({ password, setPassword, showPassword, setShowPassword }) => {
   useEffect(() => {
     // Check if user has completed face authentication
     const checkAuthStatus = async () => {
-      const token = localStorage.getItem('token');
-      const facialId = localStorage.getItem('facialId');
-      
-      if (!token) {
-        navigate('/login');
-        return;
-      }
-      
-      // If no facialId exists but user is logged in, redirect to appropriate face auth
-      if (!facialId) {
-        const response = await fetch('/api/auth/check-face-auth', {
-          headers: {
-            'Authorization': `Bearer ${token}`
-          }
-        });
+      try {
+        const token = localStorage.getItem('token');
+        const facialId = localStorage.getItem('facialId');
         
-        const data = await response.json();
-        if (data.hasFaceAuth) {
-          localStorage.setItem('facialId', data.facialId);
-        } else {
-          window.location.href = '/faceauth.html?action=enroll';
+        if (!token) {
+          return; // Allow unauthenticated access to main page
         }
+        
+        // If no facialId exists but user is logged in, redirect to appropriate face auth
+        if (token && !facialId) {
+          try {
+            const response = await fetch('/api/auth/check-face-auth', {
+              headers: {
+                'Authorization': `Bearer ${token}`
+              }
+            });
+            
+            if (response.ok) {
+              const data = await response.json();
+              if (data.hasFaceAuth) {
+                localStorage.setItem('facialId', data.facialId);
+              } else {
+                window.location.href = '/face-auth.html?action=enroll';
+              }
+            }
+          } catch (error) {
+            console.error('Error checking face auth status:', error);
+          }
+        }
+      } catch (error) {
+        console.error('Error in checkAuthStatus:', error);
       }
     };
     
@@ -941,6 +972,37 @@ const MainPage = ({ password, setPassword, showPassword, setShowPassword }) => {
             >
               Advanced ML Analysis
             </button>
+
+            <button
+              onClick={() => {
+                // Pass the password with the correct structure
+                const analysisData = {
+                  password: password,
+                  score: analysis?.strength || 0,
+                  category: analysis?.label || 'Not Analyzed',
+                  confidence: 0.95,
+                  entropy: analysis?.entropy || 0,
+                  features: {
+                    length: password.length,
+                    has_upper: /[A-Z]/.test(password),
+                    has_lower: /[a-z]/.test(password),
+                    has_digit: /[0-9]/.test(password),
+                    has_special: /[^A-Za-z0-9]/.test(password),
+                    char_types: ((/[A-Z]/.test(password) ? 1 : 0) +
+                               (/[a-z]/.test(password) ? 1 : 0) +
+                               (/[0-9]/.test(password) ? 1 : 0) +
+                               (/[^A-Za-z0-9]/.test(password) ? 1 : 0))
+                  },
+                  patterns: analysis?.patterns || [],
+                  crack_times: analysis?.crackTimes || {}
+                };
+                navigate('/vulnerability-analysis', { state: { analysisData } });
+              }}
+              className="vulnerability-btn"
+              disabled={!password}
+            >
+              Vulnerability Analysis
+            </button>
           </div>
         </div>
 
@@ -1502,36 +1564,167 @@ const MainPage = ({ password, setPassword, showPassword, setShowPassword }) => {
                   </div>
                 </div>
               </div>
-            </div>
 
-            {Object.keys(mlResults.crackTimes || {}).length > 0 && (
-              <div className="crack-times">
-                <h3>Estimated Crack Times</h3>
-                <div className="crack-times-grid">
-                  {Object.entries(mlResults.crackTimes).map(([method, data]) => (
-                    <div key={method} className="crack-time-card">
-                      <div className="attack-type">
-                        <span className="method">{data.description}</span>
-                      </div>
-                      <div className="time-estimate">
-                        <span className="time">{data.time_readable}</span>
-                        <div className="severity-indicator">
-                          <div className={`severity-dot ${
-                            data.seconds >= 31536000 * 100 ? 'low' :
-                            data.seconds >= 31536000 ? 'medium' :
-                            data.seconds >= 86400 ? 'high' :
-                            'critical'
-                          }`}></div>
-                        </div>
-                      </div>
+              <div className="attack-scenarios">
+                <h3>Attack Scenarios</h3>
+                <div className="attack-grid">
+                  <div className="attack-card">
+                    <h4>Online Throttled Attack</h4>
+                    <div className="attack-details">
+                      <span className="speed">1,000 guesses/second</span>
+                      <span className="time">{mlResults.crackTimes?.online_throttled?.time_readable || 'N/A'}</span>
                     </div>
-                  ))}
+                    <div className="description">Rate-limited online attack simulation</div>
+                  </div>
+
+                  <div className="attack-card">
+                    <h4>Online No Throttling</h4>
+                    <div className="attack-details">
+                      <span className="speed">100,000 guesses/second</span>
+                      <span className="time">{mlResults.crackTimes?.online_unthrottled?.time_readable || 'N/A'}</span>
+                    </div>
+                    <div className="description">Unrestricted online attack simulation</div>
+                  </div>
+
+                  <div className="attack-card">
+                    <h4>Offline Slow Hash</h4>
+                    <div className="attack-details">
+                      <span className="speed">10M guesses/second</span>
+                      <span className="time">{mlResults.crackTimes?.offline_slow_hash?.time_readable || 'N/A'}</span>
+                    </div>
+                    <div className="description">Slow hash function (bcrypt, PBKDF2)</div>
+                  </div>
+
+                  <div className="attack-card">
+                    <h4>Offline Fast Hash</h4>
+                    <div className="attack-details">
+                      <span className="speed">10B guesses/second</span>
+                      <span className="time">{mlResults.crackTimes?.offline_fast_hash?.time_readable || 'N/A'}</span>
+                    </div>
+                    <div className="description">Fast hash function (SHA-1, MD5)</div>
+                  </div>
+
+                  <div className="attack-card">
+                    <h4>Massive GPU Farm</h4>
+                    <div className="attack-details">
+                      <span className="speed">1T guesses/second</span>
+                      <span className="time">{mlResults.crackTimes?.offline_gpu_farm?.time_readable || 'N/A'}</span>
+                    </div>
+                    <div className="description">Distributed GPU-based attack</div>
+                  </div>
+
+                  <div className="attack-card">
+                    <h4>Quantum Computer</h4>
+                    <div className="attack-details">
+                      <span className="speed">10T guesses/second</span>
+                      <span className="time">{mlResults.crackTimes?.quantum?.time_readable || 'N/A'}</span>
+                    </div>
+                    <div className="description">Theoretical quantum computer attack</div>
+                  </div>
                 </div>
               </div>
-            )}
-
-            
+            </div>
           </div>
+
+          <style jsx>{`
+            .attack-scenarios {
+              margin-top: 2rem;
+              padding-top: 2rem;
+              border-top: 1px solid rgba(255, 255, 255, 0.1);
+            }
+
+            .attack-grid {
+              display: grid;
+              grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+              gap: 1rem;
+              margin-top: 1rem;
+            }
+
+            .attack-card {
+              background: rgba(0, 0, 0, 0.2);
+              border-radius: 8px;
+              padding: 1rem;
+              border: 1px solid rgba(255, 255, 255, 0.1);
+            }
+
+            .attack-card h4 {
+              color: #00ffff;
+              margin: 0 0 0.5rem 0;
+              font-size: 1rem;
+            }
+
+            .attack-details {
+              display: flex;
+              justify-content: space-between;
+              align-items: center;
+              margin: 0.5rem 0;
+            }
+
+            .speed {
+              color: rgba(255, 255, 255, 0.7);
+              font-size: 0.875rem;
+            }
+
+            .time {
+              color: #00ffff;
+              font-weight: bold;
+            }
+
+            .description {
+              color: rgba(255, 255, 255, 0.5);
+              font-size: 0.875rem;
+              margin-top: 0.5rem;
+            }
+
+            .ml-modal {
+              max-width: 900px;
+              width: 90%;
+              max-height: 90vh;
+              overflow-y: auto;
+              background: #1a1f2e;
+              border-radius: 12px;
+              padding: 2rem;
+              position: relative;
+              color: white;
+            }
+
+            .ml-modal h2 {
+              color: #00ffff;
+              margin-bottom: 2rem;
+            }
+
+            .ml-modal h3 {
+              color: #00ffff;
+              margin: 1.5rem 0 1rem;
+            }
+
+            .feature-grid {
+              display: grid;
+              grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+              gap: 1rem;
+              margin: 1rem 0;
+            }
+
+            .feature {
+              background: rgba(0, 0, 0, 0.2);
+              padding: 1rem;
+              border-radius: 8px;
+              display: flex;
+              justify-content: space-between;
+              align-items: center;
+            }
+
+            @media (max-width: 768px) {
+              .attack-grid {
+                grid-template-columns: 1fr;
+              }
+
+              .ml-modal {
+                padding: 1rem;
+                width: 95%;
+              }
+            }
+          `}</style>
         </div>
       )}
 
@@ -1554,150 +1747,6 @@ const MainPage = ({ password, setPassword, showPassword, setShowPassword }) => {
           </div>
         </div>
       )}
-
-      <style jsx>{`
-        .suggestions-section {
-          padding: 2rem;
-          background: #f8fafc;
-        }
-
-        .suggestions-title {
-          font-size: 1.5rem;
-          color: #2d3748;
-          margin-bottom: 2rem;
-          border-bottom: 1px solid #e2e8f0;
-          padding-bottom: 1rem;
-        }
-
-        .suggestions-grid {
-          display: grid;
-          grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
-          gap: 2rem;
-          max-width: 1200px;
-          margin: 0 auto;
-        }
-
-        .suggestion-card {
-          background: white;
-          padding: 1.5rem;
-          border-radius: 1rem;
-          box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
-          display: flex;
-          flex-direction: column;
-          gap: 1.25rem;
-        }
-
-        .suggestion-icon {
-          width: 2.5rem;
-          height: 2.5rem;
-          background: #f7fafc;
-          border-radius: 0.5rem;
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          font-size: 1.25rem;
-        }
-
-        .suggestion-title {
-          font-size: 1rem;
-          color: #2d3748;
-          margin: 0;
-          line-height: 1.5;
-        }
-
-        .impact-label {
-          color: #718096;
-          font-size: 0.875rem;
-        }
-
-        .impact-meter {
-          flex: 1;
-          height: 0.375rem;
-          background: #edf2f7;
-          border-radius: 0.25rem;
-          overflow: hidden;
-        }
-
-        .impact-fill {
-          height: 100%;
-          background: #4299e1;
-          border-radius: 0.25rem;
-        }
-
-        .primary-action {
-          width: 100%;
-          padding: 0.75rem;
-          background: #4299e1;
-          color: white;
-          border: none;
-          border-radius: 0.5rem;
-          font-weight: 500;
-          cursor: pointer;
-          transition: background 0.2s;
-        }
-
-        .primary-action:hover {
-          background: #3182ce;
-        }
-
-        .or-divider {
-          display: block;
-          text-align: center;
-          color: #718096;
-          margin: 0.75rem 0;
-          font-size: 0.875rem;
-        }
-
-        .alternative-description {
-          color: #718096;
-          font-size: 0.875rem;
-          text-align: center;
-          margin: 0.5rem 0;
-        }
-
-        .secondary-action {
-          width: 100%;
-          padding: 0.75rem;
-          background: white;
-          color: #4299e1;
-          border: 1px solid #4299e1;
-          border-radius: 0.5rem;
-          font-weight: 500;
-          cursor: pointer;
-          transition: all 0.2s;
-        }
-
-        .secondary-action:hover {
-          background: #ebf8ff;
-        }
-
-        .impact-meter-container {
-          display: flex;
-          align-items: center;
-          gap: 0.75rem;
-        }
-
-        .suggestion-header {
-          display: flex;
-          gap: 1rem;
-          align-items: flex-start;
-        }
-
-        .suggestion-actions {
-          display: flex;
-          flex-direction: column;
-        }
-
-        @media (max-width: 768px) {
-          .suggestions-grid {
-            grid-template-columns: 1fr;
-          }
-          
-          .suggestions-section {
-            padding: 1rem;
-          }
-        }
-      `}</style>
     </div>
   );
 };
