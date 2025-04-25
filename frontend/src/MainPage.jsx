@@ -9,9 +9,308 @@ import Mainpage from './MainPage.css';
 
 // Helper function to determine strength class based on score
 const getStrengthClass = (score) => {
-  if (score >= 8) return 'strong';
-  if (score >= 5) return 'medium';
-  return 'weak';
+  if (score >= 9) return 'strength-10';
+  if (score >= 7) return 'strength-8';
+  if (score >= 5) return 'strength-6';
+  if (score >= 3) return 'strength-4';
+  if (score > 0) return 'strength-2';
+  return 'strength-0';
+};
+
+// Helper function to format crack time
+const formatCrackTime = (seconds) => {
+  if (seconds < 0.001) return 'instantly';
+  if (seconds < 1) return 'less than a second';
+  
+  const timeUnits = [
+    { unit: 'quintillion years', value: 31536000000000000000 },
+    { unit: 'quadrillion years', value: 31536000000000000 },
+    { unit: 'trillion years', value: 31536000000000 },
+    { unit: 'billion years', value: 31536000000 },
+    { unit: 'million years', value: 31536000 * 1000 },
+    { unit: 'years', value: 31536000 },
+    { unit: 'months', value: 2592000 },
+    { unit: 'weeks', value: 604800 },
+    { unit: 'days', value: 86400 },
+    { unit: 'hours', value: 3600 },
+    { unit: 'minutes', value: 60 },
+    { unit: 'seconds', value: 1 }
+  ];
+
+  for (const { unit, value } of timeUnits) {
+    if (seconds >= value) {
+      const count = seconds / value;
+      // For very large numbers, don't show decimal places
+      if (count >= 1000) {
+        return `${Math.floor(count).toLocaleString()} ${unit}`;
+      }
+      // For smaller numbers, show at most 1 decimal place
+      return `${count < 10 ? count.toFixed(1) : Math.floor(count)} ${unit}`;
+    }
+  }
+  
+  return 'instantly';
+};
+
+// Helper function to get method description
+const getMethodDescription = (method) => {
+  const descriptions = {
+    online_throttled: 'Rate-limited online attack (1k/s)',
+    online_unthrottled: 'Unrestricted online attack (100k/s)',
+    offline_slow_hash: 'Offline attack with slow hash (10M/s)',
+    offline_fast_hash: 'Offline attack with fast hash (10B/s)',
+    offline_gpu_farm: 'Massive GPU cluster attack (1T/s)',
+    quantum: 'Theoretical quantum computer attack (10T/s)'
+  };
+  return descriptions[method] || method;
+};
+
+// SHA-1 hash function
+const sha1 = async (message) => {
+  const msgBuffer = new TextEncoder().encode(message);
+  const hashBuffer = await crypto.subtle.digest('SHA-1', msgBuffer);
+  const hashArray = Array.from(new Uint8Array(hashBuffer));
+  return hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
+};
+
+// Password breach check function
+const checkPasswordBreach = async (pwd) => {
+  try {
+    const hash = await sha1(pwd);
+    const prefix = hash.substring(0, 5);
+    const suffix = hash.substring(5).toUpperCase();
+
+    const response = await fetch(`https://api.pwnedpasswords.com/range/${prefix}`);
+    const hashes = await response.text();
+    const match = hashes.split('\r\n').find(h => h.startsWith(suffix));
+    
+    return match ? parseInt(match.split(':')[1]) : 0;
+  } catch (error) {
+    console.error("Breach check failed:", error);
+    return 0;
+  }
+};
+
+// Unified password analysis system
+const analyzePassword = (password) => {
+  if (!password) {
+    return {
+      strength: 0,
+      strengthScore: 0,
+      label: '',
+      entropy: 0,
+      entropyScore: 0,
+      crackTimes: {},
+      characterTypes: {
+        uppercase: false,
+        lowercase: false,
+        numbers: false,
+        symbols: false,
+        total: 0
+      },
+      patterns: [],
+      vulnerabilities: [],
+      suggestions: []
+    };
+  }
+
+  // 1. Basic character analysis
+  const charTypes = {
+    uppercase: /[A-Z]/.test(password),
+    lowercase: /[a-z]/.test(password),
+    numbers: /[0-9]/.test(password),
+    symbols: /[^A-Za-z0-9]/.test(password)
+  };
+  
+  const charCounts = {
+    uppercase: (password.match(/[A-Z]/g) || []).length,
+    lowercase: (password.match(/[a-z]/g) || []).length,
+    numbers: (password.match(/[0-9]/g) || []).length,
+    symbols: (password.match(/[^A-Za-z0-9]/g) || []).length
+  };
+
+  // 2. Calculate base entropy
+  const charsetSize = (charTypes.uppercase ? 26 : 0) +
+                     (charTypes.lowercase ? 26 : 0) +
+                     (charTypes.numbers ? 10 : 0) +
+                     (charTypes.symbols ? 32 : 0);
+  
+  let entropy = Math.log2(Math.pow(charsetSize || 1, password.length));
+
+  // 3. Pattern detection and penalties
+  const patterns = {
+    repeatingChars: /(.)\1{2,}/g,
+    sequentialLetters: /(?:abc|bcd|cde|def|efg|fgh|ghi|hij|ijk|jkl|klm|lmn|nop|opq|pqr|rst|stu|tuv|uvw|vwx|xyz)/i,
+    sequentialNumbers: /(?:012|123|234|345|456|567|678|789|987|876|765|654|543|432|321|210)/,
+    keyboardPatterns: /(?:qwerty|asdfgh|zxcvbn|qazwsx|qweasd)/i,
+    commonWords: /(?:password|admin|welcome|login|user|guest|123456|qwerty|letmein|dragon)/i,
+    dates: /(?:19|20)\d{2}|(?:0[1-9]|1[0-2])(?:0[1-9]|[12]\d|3[01])/
+  };
+
+  const foundPatterns = [];
+  let patternPenalty = 0;
+
+  Object.entries(patterns).forEach(([type, regex]) => {
+    const matches = (password.match(regex) || []).length;
+    if (matches > 0) {
+      foundPatterns.push({
+        type,
+        matches,
+        severity: type === 'commonWords' ? 'critical' :
+                 type === 'keyboardPatterns' ? 'high' :
+                 type === 'sequentialLetters' || type === 'sequentialNumbers' ? 'medium' : 'low'
+      });
+
+      switch (type) {
+        case 'repeatingChars':
+          patternPenalty += matches * 8;
+          break;
+        case 'sequentialLetters':
+        case 'sequentialNumbers':
+          patternPenalty += matches * 10;
+          break;
+        case 'keyboardPatterns':
+          patternPenalty += matches * 12;
+          break;
+        case 'commonWords':
+          patternPenalty += matches * 15;
+          break;
+        case 'dates':
+          patternPenalty += matches * 10;
+          break;
+      }
+    }
+  });
+
+  // 4. Calculate final entropy and strength score
+  entropy = Math.max(0, entropy - patternPenalty);
+  const normalizedEntropy = Math.min(100, Math.max(0, entropy * 2));
+  
+  // Calculate strength score (0-10)
+  const strengthScore = Math.round(normalizedEntropy / 10);
+
+  // 5. Calculate crack times
+  const HARDWARE_SPEEDS = {
+    online_throttled: 1000,
+    online_unthrottled: 100_000,
+    offline_slow_hash: 10_000_000,
+    offline_fast_hash: 10_000_000_000,
+    offline_gpu_farm: 1_000_000_000_000,
+    quantum: 10_000_000_000_000
+  };
+
+  const crackTimes = {};
+  Object.entries(HARDWARE_SPEEDS).forEach(([method, speed]) => {
+    const combinations = Math.pow(2, entropy);
+    const seconds = combinations / (2 * speed);
+    crackTimes[method] = {
+      seconds,
+      time_readable: formatCrackTime(seconds),
+      description: getMethodDescription(method)
+    };
+  });
+
+  // Get fastest crack time for display
+  const fastestCrack = Object.values(crackTimes)
+    .reduce((fastest, current) => 
+      current.seconds < fastest.seconds ? current : fastest
+    );
+
+  // 6. Generate strength label
+  const label = strengthScore >= 8 ? 'Very Strong' :
+                strengthScore >= 6 ? 'Strong' :
+                strengthScore >= 4 ? 'Moderate' :
+                strengthScore >= 2 ? 'Weak' : 'Very Weak';
+
+  // Define attack types for vulnerability calculation
+  const attackTypes = {
+    DICTIONARY: {
+      name: "Dictionary Attack",
+      description: "Uses common words/phrases",
+      indicator: (p) => /[a-z]{4,}/i.test(p) && !/[^a-z0-9]/i.test(p),
+      severity: "high"
+    },
+    BRUTE_FORCE: {
+      name: "Brute Force",
+      description: "Tries all combinations",
+      indicator: (p) => p.length < 8,
+      severity: "medium"
+    },
+    PATTERN: {
+      name: "Pattern",
+      description: "Targets common sequences",
+      indicator: (p) => /123|abc|qwerty|asdf|password/i.test(p),
+      severity: "high"
+    },
+    REPEATING: {
+      name: "Repeating",
+      description: "Exploits repeated patterns",
+      indicator: (p) => /(.)\1{2,}/.test(p),
+      severity: "medium"
+    },
+    PERSONAL_INFO: {
+      name: "Personal Info",
+      description: "Uses names/birthdays",
+      indicator: (p) => p.toLowerCase().includes('barclays'),
+      severity: "high"
+    },
+    SPRAYING: {
+      name: "Password Spraying",
+      description: "Tries common passwords",
+      indicator: (p) => ['password', '123456', 'welcome'].includes(p.toLowerCase()),
+      severity: "critical"
+    }
+  };
+
+  // Calculate vulnerabilities
+  const vulnerabilities = Object.entries(attackTypes)
+    .filter(([_, attack]) => attack.indicator(password))
+    .map(([key, attack]) => ({
+      id: key,
+      name: attack.name,
+      description: attack.description,
+      severity: attack.severity
+    }));
+
+  // 8. Generate suggestions
+  const suggestions = [];
+  
+  if (password.length < 12) {
+    suggestions.push('Increase password length to at least 12 characters');
+  }
+  if (!charTypes.uppercase) {
+    suggestions.push('Add uppercase letters');
+  }
+  if (!charTypes.lowercase) {
+    suggestions.push('Add lowercase letters');
+  }
+  if (!charTypes.numbers) {
+    suggestions.push('Add numbers');
+  }
+  if (!charTypes.symbols) {
+    suggestions.push('Add special characters');
+  }
+  if (foundPatterns.length > 0) {
+    suggestions.push('Avoid common patterns and sequences');
+  }
+
+  return {
+    strength: strengthScore,
+    strengthScore: normalizedEntropy,
+    label,
+    entropy: Math.round(entropy),
+    entropyScore: Math.round(normalizedEntropy),
+    crackTimes,
+    crackTime: fastestCrack.time_readable,
+    characterTypes: {
+      ...charTypes,
+      total: Object.values(charTypes).filter(Boolean).length
+    },
+    charCounts,
+    patterns: foundPatterns,
+    vulnerabilities,
+    suggestions
+  };
 };
 
 const MainPage = ({ password, setPassword, showPassword, setShowPassword }) => {
@@ -20,13 +319,11 @@ const MainPage = ({ password, setPassword, showPassword, setShowPassword }) => {
   const [strength, setStrength] = useState(0);
   const [strengthLabel, setStrengthLabel] = useState('');
   const [crackTime, setCrackTime] = useState('');
-  const [passwordSuggestions, setPasswordSuggestions] = useState([]);
   const [showSuggestions, setShowSuggestions] = useState(false);
   const [showMLAnalysis, setShowMLAnalysis] = useState(false);
-  const [mlAnalysis, setMLAnalysis] = useState(null);
+  const [mlResults, setMLResults] = useState(null);
   const [isMLLoading, setIsMLLoading] = useState(false);
   const [showMLModal, setShowMLModal] = useState(false);
-  const [mlResults, setMLResults] = useState(null);
   const [showChatbot, setShowChatbot] = useState(false);
   const navigate = useNavigate();
   
@@ -102,7 +399,7 @@ const MainPage = ({ password, setPassword, showPassword, setShowPassword }) => {
       severity: "high"
     },
     SPRAYING: {
-      name: "Spraying",
+      name: "Password Spraying",
       description: "Tries common passwords",
       indicator: (pwd) => ['password', '123456', 'welcome'].includes(pwd.toLowerCase()),
       severity: "critical"
@@ -136,103 +433,9 @@ const MainPage = ({ password, setPassword, showPassword, setShowPassword }) => {
     return variants;
   }, []);
 
-  const calculatePasswordStrength = (pwd) => {
-    if (!pwd) return 0;
-    
-    let score = 0;
-    const length = pwd.length;
-    
-    // Length score (max 30 points)
-    if (length >= 12) score += 30;
-    else if (length >= 10) score += 25;
-    else if (length >= 8) score += 20;
-    else score += Math.max(0, length * 2); // 2 points per character for short passwords
-
-    // Character variety score (max 30 points)
-    const hasLower = /[a-z]/.test(pwd);
-    const hasUpper = /[A-Z]/.test(pwd);
-    const hasDigit = /[0-9]/.test(pwd);
-    const hasSpecial = /[^A-Za-z0-9]/.test(pwd);
-    
-    score += (hasLower ? 7.5 : 0);
-    score += (hasUpper ? 7.5 : 0);
-    score += (hasDigit ? 7.5 : 0);
-    score += (hasSpecial ? 7.5 : 0);
-
-    // Complexity bonuses (max 20 points)
-    const charTypes = [hasLower, hasUpper, hasDigit, hasSpecial].filter(Boolean).length;
-    score += (charTypes - 1) * 5; // Bonus for mixing character types
-
-    // Pattern penalties
-    const patterns = {
-      repeatingChars: /(.)\1{2,}/,                    // aaa, 111, ...
-      sequentialLetters: /abc|bcd|cde|def|efg|fgh/i,  // abc, cde, ...
-      sequentialNumbers: /123|234|345|456|567|678|789/, // 123, 234, ...
-      commonWords: /password|admin|user|login|welcome/i,
-      keyboardPatterns: /qwerty|asdfgh|zxcvbn/i
-    };
-
-    // Apply penalties (max -30 points)
-    Object.values(patterns).forEach(pattern => {
-      if (pattern.test(pwd)) {
-        score -= 6;
-      }
-    });
-
-    // Entropy bonus (max 20 points)
-    const charsetSize = (hasLower ? 26 : 0) + (hasUpper ? 26 : 0) + 
-                       (hasDigit ? 10 : 0) + (hasSpecial ? 32 : 0);
-    const entropy = Math.log2(Math.pow(charsetSize || 1, length));
-    score += Math.min(20, entropy / 4);
-
-    // Final adjustments
-    score = Math.max(0, Math.min(100, score)); // Ensure score is between 0 and 100
-    
-    // Convert to 0-10 scale for display
-    return score / 10;
-  };
-
   const handleGenerateSuggestions = () => {
     setShowChatbot(true);
   };
-
-  const calculateAttackRiskScores = useCallback((pwd) => {
-    if (!pwd) return {};
-    
-    const scores = {};
-    const length = pwd.length;
-    
-    scores.DICTIONARY = /[a-z]{4,}/i.test(pwd) && !/[^a-z0-9]/i.test(pwd) 
-      ? Math.min(100, 70 + (length * 2)) : 10;
-    
-    scores.BRUTE_FORCE = length < 8 
-      ? Math.min(100, 30 + (60 - (length * 7.5))) 
-      : Math.max(10, 50 - (length * 2));
-    
-    scores.PATTERN = /123|abc|qwerty|asdf|password/i.test(pwd) ? 85 : 15;
-    
-    scores.REPEATING = /(.)\1{2,}/.test(pwd) 
-      ? Math.min(100, 60 + (pwd.match(/(.)\1{2,}/g)?.length * 10 || 0)) : 10;
-    
-    scores.PERSONAL_INFO = pwd.toLowerCase().includes('barclays') ? 90 : 10;
-    
-    scores.SPRAYING = ['password', '123456', 'welcome'].includes(pwd.toLowerCase()) ? 100 : 10;
-    
-    return scores;
-  }, []);
-
-  const calculateVulnerabilities = useCallback((pwd) => {
-    const riskScores = calculateAttackRiskScores(pwd);
-    return Object.entries(attackTypes)
-      .map(([key, attack]) => ({
-        id: key,
-        name: attack.name,
-        description: attack.description,
-        severity: attack.severity,
-        riskScore: riskScores[key] || 0,
-        isVulnerable: attack.indicator(pwd)
-      }));
-  }, [attackTypes, calculateAttackRiskScores]);
 
   const generateWeaknessReview = useCallback((pwd) => {
     const review = [];
@@ -346,9 +549,9 @@ const MainPage = ({ password, setPassword, showPassword, setShowPassword }) => {
     const patterns = {
       repeating: /(.)\1{2,}/,
       sequential_nums: /(?:012|123|234|345|456|567|678|789|987|876|765|654|543|432|321|210)/,
-      sequential_chars: /(?:abc|bcd|cde|def|efg|fgh|ghi|hij|ijk|jkl|klm|lmn|nop|opq|pqr|rst|stu|tuv|uvw|vwx|xyz)/i,
+      sequential_chars: /(?:abc|bcd|cde|def|efg|fgh|ghi|hij|ijk|jkl|klm|lmn|nop|opq|pqr|rst|stu|tuv|uvw|vwx|wxy|xyz)/i,
       keyboard_patterns: /(?:qwerty|asdfgh|zxcvbn|qazwsx|qweasd)/i,
-      common_words: /(?:password|admin|welcome|login|user|guest|123456|qwerty)/i,
+      common_words: /(?:password|admin|welcome|login|user|guest|123456|qwerty|letmein|dragon)/i,
       dates: /(?:19\d{2}|20\d{2}|0[1-9]|1[0-2])(?:0[1-9]|[12]\d|3[01])/
     };
 
@@ -418,324 +621,167 @@ const MainPage = ({ password, setPassword, showPassword, setShowPassword }) => {
     return crackTimes;
   }, []);
 
-  const formatCrackTime = (seconds) => {
-    // Updated time thresholds for more granular and realistic display
-    const timeUnits = [
-      { unit: 'years', value: 31536000 },
-      { unit: 'months', value: 2592000 },
-      { unit: 'weeks', value: 604800 },
-      { unit: 'days', value: 86400 },
-      { unit: 'hours', value: 3600 },
-      { unit: 'minutes', value: 60 },
-      { unit: 'seconds', value: 1 }
-    ];
-
-    if (seconds < 0.001) return 'instantly';
-    if (seconds < 1) return 'less than a second';
-    
-    for (const { unit, value } of timeUnits) {
-      if (seconds >= value) {
-        const count = seconds / value;
-        // Only show one decimal place for better readability
-        return `${count.toFixed(1)} ${unit}`;
-      }
-    }
-    
-    return 'instantly';
-  };
-
-  const getMethodDescription = (method) => {
-    const descriptions = {
-      online_throttled: 'Rate-limited online attack (1k/s)',
-      online_unthrottled: 'Unrestricted online attack (100k/s)',
-      offline_slow_hash: 'Offline attack with slow hash (10M/s)',
-      offline_fast_hash: 'Offline attack with fast hash (10B/s)',
-      offline_gpu_farm: 'Massive GPU cluster attack (1T/s)',
-      quantum: 'Theoretical quantum computer attack (10T/s)'
-    };
-    return descriptions[method] || method;
-  };
-
-  const calculatePasswordMetrics = useCallback((pwd) => {
-    if (!pwd) return {
-      strength: 0,
-      label: '',
-      crackTime: '',
-      entropyScore: 0,
-      vulnerabilities: [],
-      weaknesses: []
-    };
-
-    // Get ML predictions if available
-    const mlPredictions = mlResults?.score ? {
-      score: mlResults.score,
-      confidence: mlResults.confidence || 0.85
-    } : null;
-
-    // Calculate crack times using the new function
-    const crackTimes = calculateCrackTime(pwd, mlPredictions);
-    
-    // Find the fastest crack time for display
-    const fastestCrack = Object.values(crackTimes)
-      .reduce((fastest, current) => 
-        current.seconds < fastest.seconds ? current : fastest
-      );
-
-    // Calculate strength score based on the fastest crack time
-    let score = 0;
-    if (fastestCrack.seconds >= 31536000 * 100) score = 4; // Centuries
-    else if (fastestCrack.seconds >= 31536000) score = 3;  // Years
-    else if (fastestCrack.seconds >= 86400) score = 2;     // Days
-    else if (fastestCrack.seconds >= 3600) score = 1;      // Hours
-    else score = 0;                                        // Quick to crack
-
-    const labels = [
-      'Very Weak',
-      'Weak',
-      'Moderate', 
-      'Strong',
-      'Very Strong'
-    ];
-
+  // Generate feedback based on analysis results
+  const generateFeedback = useCallback((pwd, results, breachCount) => {
     return {
-      strength: score,
-      label: labels[score],
-      crackTime: fastestCrack.time_readable,
-      crackTimes: crackTimes,
-      entropyScore: Math.min(100, Math.floor(fastestCrack.seconds > 0 ? 
-        Math.log2(fastestCrack.seconds) * 10 : 0)),
-      vulnerabilities: calculateVulnerabilities(pwd),
-      weaknesses: generateWeaknessReview(pwd)
+      main: results.label + (breachCount > 0 ? ` (Found in ${breachCount} breaches)` : ''),
+      suggestions: results.suggestions,
+      vulnerabilities: results.vulnerabilities
     };
-  }, [calculateCrackTime, calculateVulnerabilities, generateWeaknessReview, mlResults]);
-
-  const generatePasswordFromSuggestion = (currentPassword, suggestion) => {
-    if (!currentPassword) return '';
-    
-    let newPassword = currentPassword;
-    
-    if (suggestion.includes('length')) {
-      // Add random characters to increase length
-      const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789!@#$%^&*';
-      const randomLength = Math.floor(Math.random() * 4) + 2; // Add 2-5 random characters
-      for (let i = 0; i < randomLength; i++) {
-        newPassword += chars.charAt(Math.floor(Math.random() * chars.length));
-      }
-    } else if (suggestion.includes('uppercase')) {
-      // Convert some lowercase letters to uppercase
-      newPassword = newPassword.replace(/[a-z]/g, (char, index) => 
-        Math.random() > 0.5 ? char.toUpperCase() : char
-      );
-    } else if (suggestion.includes('lowercase')) {
-      // Convert some uppercase letters to lowercase
-      newPassword = newPassword.replace(/[A-Z]/g, (char, index) => 
-        Math.random() > 0.5 ? char.toLowerCase() : char
-      );
-    } else if (suggestion.includes('number')) {
-      // Add a random number
-      newPassword += Math.floor(Math.random() * 10);
-    } else if (suggestion.includes('special')) {
-      // Add a random special character
-      const specialChars = '!@#$%^&*';
-      newPassword += specialChars.charAt(Math.floor(Math.random() * specialChars.length));
-    } else if (suggestion.includes('pattern')) {
-      // Reverse the password to break patterns
-      newPassword = newPassword.split('').reverse().join('');
-    }
-    
-    return newPassword;
-  };
-
-  useEffect(() => {
-    const metrics = calculatePasswordMetrics(password);
-    setStrength(metrics.strength);
-    setStrengthLabel(metrics.label);
-    setCrackTime(metrics.crackTime);
-  }, [password, calculatePasswordMetrics]);
-
-  const sha1 = async (message) => {
-    const msgBuffer = new TextEncoder().encode(message);
-    const hashBuffer = await crypto.subtle.digest('SHA-1', msgBuffer);
-    const hashArray = Array.from(new Uint8Array(hashBuffer));
-    return hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
-  };
-
-  const checkPasswordBreach = useCallback(async (pwd) => {
-    try {
-      const hash = await sha1(pwd);
-      const prefix = hash.substring(0, 5);
-      const suffix = hash.substring(5).toUpperCase();
-
-      const response = await fetch(`https://api.pwnedpasswords.com/range/${prefix}`);
-      const hashes = await response.text();
-      const match = hashes.split('\r\n').find(h => h.startsWith(suffix));
-      
-      return match ? parseInt(match.split(':')[1]) : 0;
-    } catch (error) {
-      console.error("Breach check failed:", error);
-      return 0;
-    }
   }, []);
 
-  const generateFeedback = useCallback((pwd, backendAnalysis, breachCount) => {
-    const feedback = {
-      main: "",
+  // Update the default analysis structure
+  const defaultAnalysis = {
+    entropyScore: 0,
+    crackTime: 'instantly',
+    breachCount: 0,
+    weaknesses: [],
+    vulnerabilities: [],
+    suggestions: [],
+    feedback: {
+      main: '',
       suggestions: [],
-      vulnerabilities: backendAnalysis.patterns || [],
-      weaknesses: backendAnalysis.attack_types || []
-    };
-
-    // Map backend strength score to our categories
-    const strengthScore = backendAnalysis.strength_score;
-    if (strengthScore < 20) feedback.main = "🚨 Extremely weak - crackable instantly";
-    else if (strengthScore < 40) feedback.main = "⚠️ Weak - vulnerable to attacks";
-    else if (strengthScore < 60) feedback.main = "🟡 Moderate - could be stronger";
-    else feedback.main = "✅ Strong password";
-
-    // Add suggestions from backend
-    if (backendAnalysis.suggestions) {
-      feedback.suggestions = backendAnalysis.suggestions;
+      vulnerabilities: []
     }
+  };
 
-    // Add breach information if found
-    if (breachCount > 0) {
-      feedback.main += ` (Found in ${breachCount} breaches)`;
-      feedback.suggestions.unshift("Change this password immediately!");
-    }
-
-    return feedback;
-  }, []);
-
-  const analyzePassword = useCallback(async () => {
+  // Update handleAnalyze to properly set all metrics
+  const handleAnalyze = useCallback(async () => {
     if (!password.trim()) {
-      setAnalysis({
-        message: 'Please enter a password',
-        isBreached: false,
-        breachCount: 0
-      });
+      setAnalysis(defaultAnalysis);
       return;
     }
-   
+
     setIsLoading(true);
     try {
-      const metrics = calculatePasswordMetrics(password);
+      const results = analyzePassword(password);
       const breachCount = await checkPasswordBreach(password);
 
-      setAnalysis({
-        entropyScore: metrics.entropyScore,
-        crackTime: metrics.crackTime,
+      const analysisData = {
+        ...defaultAnalysis,
+        ...results,
+        entropyScore: results.entropyScore,
+        crackTime: results.crackTime,
         breachCount,
         isBreached: breachCount > 0,
-        feedback: generateFeedback(password, metrics, breachCount),
-        vulnerabilities: metrics.vulnerabilities,
-        weaknesses: metrics.weaknesses
+        feedback: generateFeedback(password, results, breachCount)
+      };
+
+      setAnalysis(analysisData);
+      setMLResults({
+        score: results.strength,
+        category: results.label,
+        confidence: 0.95,
+        details: {
+          length: password.length,
+          entropy: results.entropy,
+          characterTypes: results.characterTypes
+        },
+        crackTimes: results.crackTimes
       });
     } catch (error) {
-      setAnalysis({
-        message: 'Error analyzing password',
-        isBreached: false,
-        breachCount: 0
-      });
       console.error("Analysis error:", error);
+      setAnalysis(defaultAnalysis);
     } finally {
       setIsLoading(false);
     }
-  }, [password, calculatePasswordMetrics, checkPasswordBreach, generateFeedback]);
+  }, [password, generateFeedback]);
+
+  const calculateStrengthFromCrackTime = (seconds) => {
+    // Define thresholds for different strength levels
+    const thresholds = [
+      { score: 10, time: 31536000000000000 },    // 1 quadrillion years (Very Strong)
+      { score: 9, time: 31536000000000 },        // 1 trillion years
+      { score: 8, time: 31536000000 },           // 1 billion years
+      { score: 7, time: 31536000 * 1000 },       // 1 million years
+      { score: 6, time: 31536000 * 100 },        // 100 years
+      { score: 5, time: 31536000 },              // 1 year
+      { score: 4, time: 2592000 * 6 },           // 6 months
+      { score: 3, time: 86400 * 30 },            // 30 days
+      { score: 2, time: 3600 },                  // 1 hour
+      { score: 1, time: 60 }                     // 1 minute
+    ];
+
+    for (const { score, time } of thresholds) {
+      if (seconds >= time) {
+        return score;
+      }
+    }
+    return 0; // Less than 1 minute
+  };
+
+  const getStrengthCategory = (score) => {
+    if (score >= 9) return "Very Strong";
+    if (score >= 7) return "Strong";
+    if (score >= 5) return "Moderate";
+    if (score >= 3) return "Weak";
+    return "Very Weak";
+  };
 
   const handleMLAnalysis = async () => {
     if (!password) return;
     
     setIsMLLoading(true);
+    setAnalysis(null);
     try {
-      const response = await fetch('http://localhost:5000/api/analyze-password', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${localStorage.getItem('token')}`
-        },
-        body: JSON.stringify({ password })
-      });
+      // Calculate metrics using the same function as main page
+      const results = analyzePassword(password);
+      
+      // Get crack time in seconds
+      const crackTimeInSeconds = (() => {
+        const fastestCrack = Object.values(results.crackTimes || {})
+          .reduce((fastest, current) => 
+            current.seconds < fastest.seconds ? current : fastest
+          );
+        return fastestCrack.seconds;
+      })();
 
-      let data;
-      const text = await response.text();
+      // Calculate strength score based on crack time
+      const strengthScore = calculateStrengthFromCrackTime(crackTimeInSeconds);
+      const category = getStrengthCategory(strengthScore);
       
-      try {
-        data = JSON.parse(text);
-      } catch (e) {
-        console.error('Failed to parse response:', text);
-        throw new Error('Invalid response from server');
-      }
-
-      if (!response.ok) {
-        throw new Error(data.message || 'Failed to analyze password');
-      }
-      
-      if (data.error) {
-        throw new Error(data.message || 'Failed to analyze password');
-      }
-      
-      // Calculate our own strength score
-      const strengthScore = calculatePasswordStrength(password);
-      
-      // Calculate crack times using our unified method
-      const crackTimes = calculateCrackTime(password, {
-        score: strengthScore,
-        confidence: data?.confidence || 0.85
-      });
-
       // Transform the data to match our UI expectations
       const processedData = {
         score: strengthScore,
-        category: getStrengthCategory(strengthScore),
-        confidence: data?.confidence || 0.85,
+        category: category,
+        confidence: 0.95,
         details: {
-          length: data?.features?.length || password.length,
-          entropy: data?.features?.entropy || calculateEntropy(password),
-          characterTypes: {
-            uppercase: data?.features?.has_upper || /[A-Z]/.test(password),
-            lowercase: data?.features?.has_lower || /[a-z]/.test(password),
-            numbers: data?.features?.has_digit || /[0-9]/.test(password),
-            symbols: data?.features?.has_special || /[^A-Za-z0-9]/.test(password),
-            total: data?.features?.char_types || [/[A-Z]/, /[a-z]/, /[0-9]/, /[^A-Za-z0-9]/]
-              .filter(regex => regex.test(password)).length
-          }
+          length: password.length,
+          entropy: results.entropy,
+          characterTypes: results.characterTypes
         },
-        crackTimes: crackTimes,
-        suggestions: data?.suggestions || generateSuggestions(password, strengthScore)
+        crackTimes: results.crackTimes
       };
 
-      console.log('Processed data:', processedData);
       setMLResults(processedData);
       setShowMLModal(true);
     } catch (error) {
       console.error('ML Analysis error:', error);
       // Even on error, calculate and show local strength analysis
-      const strengthScore = calculatePasswordStrength(password);
-      const crackTimes = calculateCrackTime(password, {
-        score: strengthScore,
-        confidence: 0.85
-      });
+      const results = analyzePassword(password);
+      const crackTimeInSeconds = (() => {
+        const fastestCrack = Object.values(results.crackTimes || {})
+          .reduce((fastest, current) => 
+            current.seconds < fastest.seconds ? current : fastest
+          );
+        return fastestCrack.seconds;
+      })();
+
+      const strengthScore = calculateStrengthFromCrackTime(crackTimeInSeconds);
+      const category = getStrengthCategory(strengthScore);
 
       setMLResults({
         error: true,
         message: error.message || 'Unable to analyze password. Please try again.',
         score: strengthScore,
-        category: getStrengthCategory(strengthScore),
-        confidence: 0.85, // Local analysis confidence
+        category: category,
+        confidence: 0.95,
         details: {
           length: password.length,
-          entropy: calculateEntropy(password),
-          characterTypes: {
-            uppercase: /[A-Z]/.test(password),
-            lowercase: /[a-z]/.test(password),
-            numbers: /[0-9]/.test(password),
-            symbols: /[^A-Za-z0-9]/.test(password),
-            total: [/[A-Z]/, /[a-z]/, /[0-9]/, /[^A-Za-z0-9]/]
-              .filter(regex => regex.test(password)).length
-          }
+          entropy: results.entropy,
+          characterTypes: results.characterTypes
         },
-        crackTimes: crackTimes,
-        suggestions: generateSuggestions(password, strengthScore)
+        crackTimes: results.crackTimes
       });
       setShowMLModal(true);
     } finally {
@@ -743,57 +789,64 @@ const MainPage = ({ password, setPassword, showPassword, setShowPassword }) => {
     }
   };
 
-  // Helper function to get strength category based on score
-  const getStrengthCategory = (score) => {
-    if (score >= 9) return 'Very Strong';
-    if (score >= 7) return 'Strong';
-    if (score >= 5) return 'Moderate';
-    if (score >= 3) return 'Weak';
-    return 'Very Weak';
-  };
+  // Update useEffect to handle real-time metrics updates
+  useEffect(() => {
+    if (password) {
+      const results = analyzePassword(password);
+      
+      // Get crack time in seconds from the fastest attack method
+      const fastestCrack = Object.values(results.crackTimes || {})
+        .reduce((fastest, current) => 
+          current.seconds < fastest.seconds ? current : fastest
+        );
+      
+      // Calculate strength score based on crack time
+      const strengthScore = calculateStrengthFromCrackTime(fastestCrack.seconds);
+      const strengthCategory = getStrengthCategory(strengthScore);
+      
+      setStrength(strengthScore);
+      setStrengthLabel(strengthCategory);
+      setCrackTime(formatCrackTime(fastestCrack.seconds));
+    } else {
+      setStrength(0);
+      setStrengthLabel('');
+      setCrackTime('instantly');
+    }
+  }, [password]);
 
-  // Helper function to calculate entropy
-  const calculateEntropy = (password) => {
-    const charsetSize = (/[a-z]/.test(password) ? 26 : 0) +
-                       (/[A-Z]/.test(password) ? 26 : 0) +
-                       (/[0-9]/.test(password) ? 10 : 0) +
-                       (/[^A-Za-z0-9]/.test(password) ? 32 : 0);
-    return Math.log2(Math.pow(charsetSize || 1, password.length));
-  };
+  // Helper function to determine strength class and width
+  const getStrengthMeterProps = useCallback((score) => {
+    if (score >= 9) return { class: 'very-strong', width: '100%' };
+    if (score >= 7) return { class: 'strong', width: '80%' };
+    if (score >= 5) return { class: 'moderate', width: '60%' };
+    if (score >= 3) return { class: 'weak', width: '40%' };
+    if (score > 0) return { class: 'very-weak', width: '20%' };
+    return { class: 'empty', width: '0%' };
+  }, []);
 
-  // Helper function to generate suggestions based on password analysis
-  const generateSuggestions = (password, score) => {
-    const suggestions = [];
+  const generateMemorable = (base) => {
+    const adjectives = ["Secure", "Mighty", "Swift", "Brave", "Clever", "Noble", "Royal", "Wise", "Epic", "Grand"];
+    const nouns = ["Dragon", "Knight", "Shield", "Castle", "Crown", "Guard", "Tower", "Sword", "Hero", "Legend"];
+    const numbers = () => Math.floor(Math.random() * 900 + 100);
+    const symbols = ["!", "@", "#", "$", "%", "&", "*"];
     
-    if (password.length < 12) {
-      suggestions.push('Increase password length to at least 12 characters');
-    }
+    const getRandomItem = (arr) => arr[Math.floor(Math.random() * arr.length)];
     
-    if (!/[A-Z]/.test(password)) {
-      suggestions.push('Add uppercase letters');
-    }
+    const variations = [
+      // Original pattern with base word
+      `${base}${numbers()}${getRandomItem(symbols)}`,
+      
+      // Random adjective + base + numbers
+      `${getRandomItem(adjectives)}${base}${numbers()}`,
+      
+      // Base + noun + symbol
+      `${base}${getRandomItem(nouns)}${getRandomItem(symbols)}`,
+      
+      // Adjective + noun + numbers + symbol
+      `${getRandomItem(adjectives)}${getRandomItem(nouns)}${numbers()}${getRandomItem(symbols)}`
+    ];
     
-    if (!/[a-z]/.test(password)) {
-      suggestions.push('Add lowercase letters');
-    }
-    
-    if (!/[0-9]/.test(password)) {
-      suggestions.push('Add numbers');
-    }
-    
-    if (!/[^A-Za-z0-9]/.test(password)) {
-      suggestions.push('Add special characters');
-    }
-    
-    if (/(.)\1{2,}/.test(password)) {
-      suggestions.push('Avoid repeating characters');
-    }
-    
-    if (/123|abc|qwerty|password/i.test(password)) {
-      suggestions.push('Avoid common patterns and sequences');
-    }
-    
-    return suggestions;
+    return variations;
   };
 
   return (
@@ -841,14 +894,20 @@ const MainPage = ({ password, setPassword, showPassword, setShowPassword }) => {
           <button 
             className="toggle-visibility"
             onClick={() => setShowPassword(!showPassword)}
+            aria-label={showPassword ? "Hide password" : "Show password"}
           >
-            {showPassword ? "🙈" : "👁️"}
+            {showPassword ? "Hide" : "Show"}
           </button>
         </div>
 
-        <div className="strength-meter">
-          <div className={`strength-fill strength-${strength}`} />
-        </div>
+        {password && (
+          <div className="strength-meter">
+            <div 
+              className={`strength-fill ${getStrengthMeterProps(strength).class}`}
+              style={{ width: getStrengthMeterProps(strength).width }}
+            />
+          </div>
+        )}
 
         {password && (
           <div className="strength-info">
@@ -859,7 +918,7 @@ const MainPage = ({ password, setPassword, showPassword, setShowPassword }) => {
 
         <div className="button-group">
           <button 
-            onClick={analyzePassword}
+            onClick={handleAnalyze}
             disabled={isLoading}
             className={`analyze-btn ${isLoading ? 'loading' : ''}`}
           >
@@ -885,31 +944,14 @@ const MainPage = ({ password, setPassword, showPassword, setShowPassword }) => {
           </div>
         </div>
 
-        {showSuggestions && (
+        {showSuggestions && analysis.suggestions && (
           <div className="suggestions-popup">
             <h4>Strong Password Suggestions:</h4>
             <ul>
-              {passwordSuggestions.map((suggestion, index) => (
+              {analysis.suggestions.map((suggestion, index) => (
                 <li key={index}>
                   <div className="suggestion-container">
-                    <button 
-                      onClick={() => {
-                        setPassword(suggestion.password);
-                        setShowSuggestions(false);
-                      }}
-                      className="suggestion-btn"
-                    >
-                      {suggestion.password}
-                    </button>
-                    <div className="strength-badge">
-                      <div className="strength-meter-mini">
-                        <div 
-                          className="strength-fill-mini" 
-                          style={{ width: `${suggestion.strength}%` }}
-                        />
-                      </div>
-                      <span>{suggestion.strength}%</span>
-                    </div>
+                    <span className="suggestion-text">{suggestion}</span>
                   </div>
                 </li>
               ))}
@@ -929,21 +971,27 @@ const MainPage = ({ password, setPassword, showPassword, setShowPassword }) => {
           </div>
         )}
 
-        {analysis && !isLoading && (
+        {(analysis || password) && (
           <div className="results-container">
             <div className="metrics-section">
               <h3>Password Metrics</h3>
               <div className="metrics-grid">
                 <div className="metric-card">
-                  <div className="metric-value">{analysis.entropyScore}/100</div>
+                  <div className="metric-value">
+                    {password ? Math.round(analysis?.entropyScore || analyzePassword(password).entropyScore || 0) : 0}/100
+                  </div>
                   <div className="metric-label">Entropy</div>
                 </div>
                 <div className="metric-card">
-                  <div className="metric-value">{analysis.crackTime}</div>
+                  <div className="metric-value">
+                    {password ? (analysis?.crackTime || analyzePassword(password).crackTime || 'instantly') : 'instantly'}
+                  </div>
                   <div className="metric-label">Crack Time</div>
                 </div>
                 <div className="metric-card">
-                  <div className="metric-value">{analysis.breachCount}</div>
+                  <div className="metric-value">
+                    {analysis?.breachCount || 0}
+                  </div>
                   <div className="metric-label">Breaches</div>
                 </div>
               </div>
@@ -954,11 +1002,11 @@ const MainPage = ({ password, setPassword, showPassword, setShowPassword }) => {
               <AttackSimulator 
                 password={password}
                 charsetSize={calculateCharsetSize(password)}
-                entropyScore={analysis.entropyScore}
+                entropyScore={password ? (analysis?.entropyScore || analyzePassword(password).entropyScore || 0) : 0}
               />
             </div>
 
-            {analysis.weaknesses && analysis.weaknesses.length > 0 && (
+            {password && (analysis?.weaknesses || []).length > 0 && (
              <div className="char-composition-section">
              <h2>Character Composition</h2>
              <div className="char-types-grid">
@@ -1162,425 +1210,241 @@ const MainPage = ({ password, setPassword, showPassword, setShowPassword }) => {
               </div>
             </div>
 
-            {analysis.feedback && analysis.feedback.suggestions && (
-  <div className="suggestions-section">
-    <h3>Targeted Improvement Suggestions</h3>
-    <div className="suggestions-grid">
-      {/* Enhanced Personal Info Detection */}
-      {(analysis.weaknesses.some(w => w.title.includes("Personal Info")) || 
-        password.match(/\b([A-Z][a-z]+)\b/g) || 
-        password.match(/\b(19|20)\d{2}\b/g) || 
-        ['john','smith','david','emma','olivia','liam','noah'].some(name => 
-          new RegExp(name, 'i').test(password))) && (
-        <div className="suggestion-card critical">
-          <div className="suggestion-icon">👤</div>
-          <div className="suggestion-content">
-            <p className="suggestion-text">
-              {password.match(/\b([A-Z][a-z]+)\b/g) ? 
-                "Detected names or proper nouns. " : 
-                "Detected personal information. "}
-              Remove these as attackers can easily guess them from social media.
-            </p>
-            <div className="suggestion-impact">
-              <span className="impact-label">Impact:</span>
-              <div className="impact-meter">
-                <div className="impact-fill" style={{ width: '95%' }} />
+            {/* Targeted Improvement Suggestions */}
+            <div className="suggestions-section">
+              <h3 className="suggestions-title">Targeted Improvement Suggestions</h3>
+              <div className="suggestions-grid">
+                {/* Enhanced Personal Info Detection */}
+                {password && (
+                  <div className="suggestion-card">
+                    <div className="suggestion-header">
+                      <div className="suggestion-icon">👤</div>
+                      <h4 className="suggestion-title">
+                        Avoid using personal information in your password.
+                      </h4>
+                    </div>
+                    
+                    <div className="impact-meter-container">
+                      <span className="impact-label">Impact:</span>
+                      <div className="impact-meter">
+                        <div className="impact-fill" style={{ width: '75%' }} />
+                      </div>
+                    </div>
+
+                    <div className="suggestion-actions">
+                      <button 
+                        className="primary-action"
+                        onClick={() => {
+                          let newPassword = password;
+                          const names = password.match(/\b([A-Z][a-z]+)\b/g) || [];
+                          names.forEach(name => {
+                            newPassword = newPassword.replace(name, 
+                              Math.random().toString(36).slice(2, 2 + name.length));
+                          });
+                          setPassword(newPassword);
+                          handleAnalyze();
+                          window.scrollTo({ top: 0, behavior: 'smooth' });
+                        }}
+                      >
+                        Remove Personal Info
+                      </button>
+                      
+                      <div className="alternative-section">
+                        <span className="or-divider">or</span>
+                        <p className="alternative-description">
+                          Generate a memorable alternative that maintains security
+                        </p>
+                        <button 
+                          className="secondary-action"
+                          onClick={() => {
+                            const variations = generateMemorable(password);
+                            setPassword(variations[Math.floor(Math.random() * variations.length)]);
+                            handleAnalyze();
+                            window.scrollTo({ top: 0, behavior: 'smooth' });
+                          }}
+                        >
+                          Generate Memorable Version
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {/* Character Variety Suggestion */}
+                {password && (
+                  <div className="suggestion-card">
+                    <div className="suggestion-header">
+                      <div className="suggestion-icon">📊</div>
+                      <h4 className="suggestion-title">
+                        Increase character variety. Your password has {new Set(password).size} 
+                        unique characters out of {password.length}.
+                      </h4>
+                    </div>
+
+                    <div className="impact-meter-container">
+                      <span className="impact-label">Impact:</span>
+                      <div className="impact-meter">
+                        <div className="impact-fill" style={{ width: '60%' }} />
+                      </div>
+                    </div>
+
+                    <div className="suggestion-actions">
+                      <button 
+                        className="primary-action"
+                        onClick={() => {
+                          let newPassword = password;
+                          const chars = '!@#$%^&*()_+-=[]{}|;:,.<>?~ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
+                          for (let i = 0; i < 3; i++) {
+                            const pos = Math.floor(Math.random() * newPassword.length);
+                            const char = chars[Math.floor(Math.random() * chars.length)];
+                            newPassword = newPassword.slice(0, pos) + char + newPassword.slice(pos + 1);
+                          }
+                          setPassword(newPassword);
+                          handleAnalyze();
+                          window.scrollTo({ top: 0, behavior: 'smooth' });
+                        }}
+                      >
+                        Enhance Variety
+                      </button>
+
+                      <div className="alternative-section">
+                        <span className="or-divider">or</span>
+                        <p className="alternative-description">
+                          Create a varied password that's easier to remember
+                        </p>
+                        <button 
+                          className="secondary-action"
+                          onClick={() => {
+                            const variations = generateMemorable(password);
+                            setPassword(variations[Math.floor(Math.random() * variations.length)]);
+                            handleAnalyze();
+                            window.scrollTo({ top: 0, behavior: 'smooth' });
+                          }}
+                        >
+                          Generate Memorable Version
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {/* Length Suggestion */}
+                {password && password.length < 12 && (
+                  <div className="suggestion-card">
+                    <div className="suggestion-header">
+                      <div className="suggestion-icon">📏</div>
+                      <h4 className="suggestion-title">
+                        Increase password length to at least 12 characters. Current length: {password.length}
+                      </h4>
+                    </div>
+
+                    <div className="impact-meter-container">
+                      <span className="impact-label">Impact:</span>
+                      <div className="impact-meter">
+                        <div className="impact-fill" style={{ width: '90%' }} />
+                      </div>
+                    </div>
+
+                    <div className="suggestion-actions">
+                      <button 
+                        className="primary-action"
+                        onClick={() => {
+                          const chars = '!@#$%^&*()_+-=[]{}|;:,.<>?~ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
+                          let newPassword = password;
+                          while (newPassword.length < 12) {
+                            newPassword += chars[Math.floor(Math.random() * chars.length)];
+                          }
+                          setPassword(newPassword);
+                          handleAnalyze();
+                          window.scrollTo({ top: 0, behavior: 'smooth' });
+                        }}
+                      >
+                        Extend Length
+                      </button>
+
+                      <div className="alternative-section">
+                        <span className="or-divider">or</span>
+                        <p className="alternative-description">
+                          Create a longer password that's structured for memorability
+                        </p>
+                        <button 
+                          className="secondary-action"
+                          onClick={() => {
+                            const variations = generateMemorable(password);
+                            setPassword(variations[Math.floor(Math.random() * variations.length)]);
+                            handleAnalyze();
+                            window.scrollTo({ top: 0, behavior: 'smooth' });
+                          }}
+                        >
+                          Generate Memorable Version
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {/* Pattern Detection */}
+                {password && /(.)\1{2,}|123|abc|qwerty/.test(password) && (
+                  <div className="suggestion-card">
+                    <div className="suggestion-header">
+                      <div className="suggestion-icon">🔄</div>
+                      <h4 className="suggestion-title">
+                        Avoid common patterns and repeated characters in your password.
+                      </h4>
+                    </div>
+
+                    <div className="impact-meter-container">
+                      <span className="impact-label">Impact:</span>
+                      <div className="impact-meter">
+                        <div className="impact-fill" style={{ width: '85%' }} />
+                      </div>
+                    </div>
+
+                    <div className="suggestion-actions">
+                      <button 
+                        className="primary-action"
+                        onClick={() => {
+                          let newPassword = password;
+                          const patterns = [/(.)\1{2,}/, /123/, /abc/, /qwerty/];
+                          patterns.forEach(pattern => {
+                            if (pattern.test(newPassword)) {
+                              const chars = '!@#$%^&*()_+-=[]{}|;:,.<>?~ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
+                              const match = newPassword.match(pattern)[0];
+                              const replacement = Array(match.length).fill().map(() => 
+                                chars[Math.floor(Math.random() * chars.length)]).join('');
+                              newPassword = newPassword.replace(match, replacement);
+                            }
+                          });
+                          setPassword(newPassword);
+                          handleAnalyze();
+                          window.scrollTo({ top: 0, behavior: 'smooth' });
+                        }}
+                      >
+                        Break Patterns
+                      </button>
+
+                      <div className="alternative-section">
+                        <span className="or-divider">or</span>
+                        <p className="alternative-description">
+                          Replace patterns with a memorable structured alternative
+                        </p>
+                        <button 
+                          className="secondary-action"
+                          onClick={() => {
+                            const variations = generateMemorable(password);
+                            setPassword(variations[Math.floor(Math.random() * variations.length)]);
+                            handleAnalyze();
+                            window.scrollTo({ top: 0, behavior: 'smooth' });
+                          }}
+                        >
+                          Generate Memorable Version
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                )}
               </div>
             </div>
-          </div>
-          <button 
-            className="apply-suggestion-btn"
-            onClick={() => {
-              // Replace names, years, and common first names
-              let newPassword = password;
-              
-              // Replace capitalized words (potential names)
-              const names = password.match(/\b([A-Z][a-z]+)\b/g) || [];
-              names.forEach(name => {
-                newPassword = newPassword.replace(name, 
-                  Math.random().toString(36).slice(2, 2 + name.length));
-              });
-              
-              // Replace common first names
-              ['john','smith','david','emma','olivia','liam','noah'].forEach(name => {
-                const regex = new RegExp(name, 'gi');
-                newPassword = newPassword.replace(regex, 
-                  Math.random().toString(36).slice(2, 2 + name.length));
-              });
-              
-              // Replace years
-              const years = password.match(/\b(19|20)\d{2}\b/g) || [];
-              years.forEach(year => {
-                newPassword = newPassword.replace(year, 
-                  Math.floor(1000 + Math.random() * 9000));
-              });
-              
-              setPassword(newPassword);
-              analyzePassword();
-            }}
-          >
-            Remove Personal Info
-          </button>
-        </div>
-      )}
-
-      {/* Dictionary Word Detection */}
-      {analysis.weaknesses.some(w => w.title.includes("Dictionary")) && (
-        <div className="suggestion-card high">
-          <div className="suggestion-icon">📖</div>
-          <div className="suggestion-content">
-            <p className="suggestion-text">
-              Avoid complete dictionary words. Attackers use dictionary attacks 
-              that try all known words and combinations.
-            </p>
-            <div className="suggestion-impact">
-              <span className="impact-label">Impact:</span>
-              <div className="impact-meter">
-                <div className="impact-fill" style={{ width: '90%' }} />
-              </div>
-            </div>
-          </div>
-          <button 
-            className="apply-suggestion-btn"
-            onClick={() => {
-              const words = password.split(/(?=[A-Z])|\W+|_/).filter(Boolean);
-              let newPassword = password;
-              
-              words.forEach(word => {
-                if (word.length > 3) {
-                  const insertPos = Math.floor(Math.random() * (word.length - 1)) + 1;
-                  const randomChar = '!@#$%^&*'[Math.floor(Math.random() * 8)];
-                  newPassword = newPassword.replace(
-                    word, 
-                    word.slice(0, insertPos) + randomChar + word.slice(insertPos)
-                  );
-                }
-              });
-              
-              setPassword(newPassword);
-              analyzePassword();
-            }}
-          >
-            Obfuscate Words
-          </button>
-        </div>
-      )}
-
-      {/* Keyboard Pattern Detection */}
-      {['qwerty','asdfgh','zxcvbn','123456','1qaz2wsx','1q2w3e4r']
-        .some(pattern => password.toLowerCase().includes(pattern)) && (
-        <div className="suggestion-card high">
-          <div className="suggestion-icon">⌨️</div>
-          <div className="suggestion-content">
-            <p className="suggestion-text">
-              Avoid keyboard patterns (like qwerty or 1qaz2wsx). These are 
-              easily guessed by attackers.
-            </p>
-            <div className="suggestion-impact">
-              <span className="impact-label">Impact:</span>
-              <div className="impact-meter">
-                <div className="impact-fill" style={{ width: '85%' }} />
-              </div>
-            </div>
-          </div>
-          <button 
-            className="apply-suggestion-btn"
-            onClick={() => {
-              let newPassword = password;
-              ['qwerty','asdfgh','zxcvbn','123456','1qaz2wsx','1q2w3e4r'].forEach(pattern => {
-                const regex = new RegExp(pattern, 'gi');
-                if (regex.test(newPassword)) {
-                  const replacement = Array.from({length: pattern.length}, () => 
-                    '!@#$%^&*'[Math.floor(Math.random() * 8)]
-                  ).join('');
-                  newPassword = newPassword.replace(regex, replacement);
-                }
-              });
-              setPassword(newPassword);
-              analyzePassword();
-            }}
-          >
-            Break Patterns
-          </button>
-        </div>
-      )}
-
-      {/* Character Variety Suggestion */}
-      {password.length > 0 && (new Set(password).size / password.length) < 0.9 && (
-        <div className="suggestion-card medium">
-          <div className="suggestion-icon">📊</div>
-          <div className="suggestion-content">
-            <p className="suggestion-text">
-              Increase character variety. Your password has {new Set(password).size} 
-              unique characters out of {password.length} ({(new Set(password).size/password.length*100).toFixed(0)}% unique).
-            </p>
-            <div className="suggestion-impact">
-              <span className="impact-label">Impact:</span>
-              <div className="impact-meter">
-                <div className="impact-fill" style={{ width: '80%' }} />
-              </div>
-            </div>
-          </div>
-          <button 
-            className="apply-suggestion-btn"
-            onClick={() => {
-              const missingTypes = [];
-              if (!/[A-Z]/.test(password)) missingTypes.push('uppercase');
-              if (!/[a-z]/.test(password)) missingTypes.push('lowercase');
-              if (!/[0-9]/.test(password)) missingTypes.push('numbers');
-              if (!/[^A-Za-z0-9]/.test(password)) missingTypes.push('symbols');
-              
-              let newPassword = password;
-              const additions = Math.max(3, Math.floor(password.length * 0.3));
-              
-              for (let i = 0; i < additions; i++) {
-                const randomType = missingTypes.length > 0 
-                  ? missingTypes[Math.floor(Math.random() * missingTypes.length)]
-                  : ['uppercase', 'lowercase', 'number', 'symbol'][Math.floor(Math.random() * 4)];
-                
-                let newChar;
-                switch(randomType) {
-                  case 'uppercase':
-                    newChar = String.fromCharCode(Math.floor(Math.random() * 26) + 65);
-                    break;
-                  case 'lowercase':
-                    newChar = String.fromCharCode(Math.floor(Math.random() * 26) + 97);
-                    break;
-                  case 'numbers':
-                    newChar = Math.floor(Math.random() * 10);
-                    break;
-                  case 'symbols':
-                    newChar = '!@#$%^&*()_+-=[]{}|;:,.<>?~'.charAt(Math.floor(Math.random() * 26));
-                    break;
-                }
-                
-                const insertPos = Math.floor(Math.random() * (newPassword.length + 1));
-                newPassword = newPassword.slice(0, insertPos) + newChar + newPassword.slice(insertPos);
-              }
-              
-              setPassword(newPassword);
-              analyzePassword();
-            }}
-          >
-            Enhance Variety
-          </button>
-        </div>
-      )}
-
-      {/* Password Memorability Helper */}
-      <div className="suggestion-card low">
-        <div className="suggestion-icon">🧠</div>
-        <div className="suggestion-content">
-          <p className="suggestion-text">
-            Make your password memorable but secure. Try a passphrase or 
-            memorable pattern that's hard to guess.
-          </p>
-          <div className="suggestion-impact">
-            <span className="impact-label">Impact:</span>
-            <div className="impact-meter">
-              <div className="impact-fill" style={{ width: '60%' }} />
-            </div>
-          </div>
-        </div>
-        <button 
-          className="apply-suggestion-btn"
-          onClick={() => {
-            const words = ['correct','battery','purple','dragon','sunshine','horse','staple','hammer','castle','ocean'];
-            const separator = '!@#$%^&*'[Math.floor(Math.random() * 8)];
-            const num = Math.floor(Math.random() * 90) + 10;
-            
-            const newPassword = 
-              words[Math.floor(Math.random() * words.length)] +
-              separator +
-              words[Math.floor(Math.random() * words.length)] +
-              num;
-            
-            setPassword(newPassword);
-            analyzePassword();
-          }}
-        >
-          Generate Memorable
-        </button>
-      </div>
-
-      {/* Password History Check */}
-      <div className="suggestion-card medium">
-        <div className="suggestion-icon">🕵️</div>
-        <div className="suggestion-content">
-          <p className="suggestion-text">
-            Avoid reusing passwords. This password {Math.random() > 0.7 ? 
-            'resembles' : 'does not resemble'} ones found in known breaches.
-          </p>
-          <div className="suggestion-impact">
-            <span className="impact-label">Impact:</span>
-            <div className="impact-meter">
-              <div className="impact-fill" style={{ width: '75%' }} />
-            </div>
-          </div>
-        </div>
-        <button 
-          className="apply-suggestion-btn"
-          onClick={() => {
-            const breachedPasswords = [
-              'password123', '123456', 'qwerty', 'letmein', 'welcome'
-            ];
-            
-            let newPassword = password;
-            if (breachedPasswords.some(bp => password.toLowerCase().includes(bp))) {
-              const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789!@#$%^&*';
-              newPassword = Array.from({length: 12}, () => 
-                chars.charAt(Math.floor(Math.random() * chars.length))
-              ).join('');
-            }
-            
-            setPassword(newPassword);
-            analyzePassword();
-          }}
-        >
-          Check Reuse
-        </button>
-      </div>
-
-      {/* Short Length Suggestion */}
-      {password.length < 12 && (
-        <div className="suggestion-card critical">
-          <div className="suggestion-icon">📏</div>
-          <div className="suggestion-content">
-            <p className="suggestion-text">
-              Increase length to at least 12 characters. Current length: {password.length}.
-              Longer passwords are exponentially harder to crack.
-            </p>
-            <div className="suggestion-impact">
-              <span className="impact-label">Impact:</span>
-              <div className="impact-meter">
-                <div className="impact-fill" style={{ width: '95%' }} />
-              </div>
-            </div>
-          </div>
-          <button 
-            className="apply-suggestion-btn"
-            onClick={() => {
-              const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789!@#$%^&*';
-              let newPassword = password;
-              while (newPassword.length < 12) {
-                newPassword += chars.charAt(Math.floor(Math.random() * chars.length));
-              }
-              setPassword(newPassword);
-              analyzePassword();
-            }}
-          >
-            Extend Password
-          </button>
-        </div>
-      )}
-
-      {/* Missing Character Types */}
-      {[/[A-Z]/.test(password), /[a-z]/.test(password), /[0-9]/.test(password), /[^A-Za-z0-9]/.test(password)]
-        .filter(Boolean).length < 4 && (
-        <div className="suggestion-card medium">
-          <div className="suggestion-icon">🧰</div>
-          <div className="suggestion-content">
-            <p className="suggestion-text">
-              Use more character types. Your password uses {
-                [/[A-Z]/.test(password), /[a-z]/.test(password), 
-                 /[0-9]/.test(password), /[^A-Za-z0-9]/.test(password)]
-                .filter(Boolean).length
-              } out of 4 possible types (uppercase, lowercase, numbers, symbols).
-            </p>
-            <div className="suggestion-impact">
-              <span className="impact-label">Impact:</span>
-              <div className="impact-meter">
-                <div className="impact-fill" style={{ width: '80%' }} />
-              </div>
-            </div>
-          </div>
-          <button 
-            className="apply-suggestion-btn"
-            onClick={() => {
-              let newPassword = password;
-              if (!/[A-Z]/.test(password)) {
-                newPassword += String.fromCharCode(Math.floor(Math.random() * 26) + 65);
-              }
-              if (!/[0-9]/.test(password)) {
-                newPassword += Math.floor(Math.random() * 10);
-              }
-              if (!/[^A-Za-z0-9]/.test(password)) {
-                newPassword += '!@#$%^&*'[Math.floor(Math.random() * 8)];
-              }
-              setPassword(newPassword);
-              analyzePassword();
-            }}
-          >
-            Add Missing Types
-          </button>
-        </div>
-      )}
-    </div>
-
-    <div className="suggestions-actions">
-      <button 
-        className="vulnerability-analysis-btn"
-        onClick={() => {
-          const analysisData = {
-            password,
-            score: analysis.entropyScore / 100,
-            category: analysis.feedback?.strengthCategory || 'Unknown',
-            confidence: 0.95,
-            features: {
-              length: password.length,
-              has_upper: /[A-Z]/.test(password),
-              has_lower: /[a-z]/.test(password),
-              has_digit: /[0-9]/.test(password),
-              has_special: /[^A-Za-z0-9]/.test(password),
-              char_types: ((/[A-Z]/.test(password) ? 1 : 0) +
-                         (/[a-z]/.test(password) ? 1 : 0) +
-                         (/[0-9]/.test(password) ? 1 : 0) +
-                         (/[^A-Za-z0-9]/.test(password) ? 1 : 0)
-            )},
-            entropy: analysis.entropyScore,
-            vulnerabilities: analysis.vulnerabilities?.map(v => ({
-              type: v.name,
-              pattern: v.description,
-              severity: v.severity
-            })) || [],
-            weaknesses: analysis.weaknesses?.map(w => ({
-              title: w.title,
-              description: w.description,
-              severity: w.severity
-            })) || [],
-            crack_times: analysis.crack_times || {}
-          };
-          navigate('/vulnerability-analysis', { 
-            state: { analysisData } 
-          });
-        }}
-      >
-        🛡️ View Detailed Vulnerability Analysis
-      </button>
-      
-      <button 
-        className="generate-strong-btn"
-        onClick={() => {
-          const words = ['correct','battery','purple','dragon','sunshine','horse','staple','hammer','castle','ocean'];
-          const separator = '!@#$%^&*'[Math.floor(Math.random() * 8)];
-          const num = Math.floor(Math.random() * 90) + 10;
-          
-          const newPassword = 
-            words[Math.floor(Math.random() * words.length)].charAt(0).toUpperCase() +
-            words[Math.floor(Math.random() * words.length)].slice(1) +
-            separator +
-            words[Math.floor(Math.random() * words.length)].charAt(0).toUpperCase() +
-            words[Math.floor(Math.random() * words.length)].slice(1) +
-            num;
-          
-          setPassword(newPassword);
-          analyzePassword();
-        }}
-      >
-      </button>
-    </div>
-  </div>
-)}
           </div>
         )}
       </div>
@@ -1690,6 +1554,150 @@ const MainPage = ({ password, setPassword, showPassword, setShowPassword }) => {
           </div>
         </div>
       )}
+
+      <style jsx>{`
+        .suggestions-section {
+          padding: 2rem;
+          background: #f8fafc;
+        }
+
+        .suggestions-title {
+          font-size: 1.5rem;
+          color: #2d3748;
+          margin-bottom: 2rem;
+          border-bottom: 1px solid #e2e8f0;
+          padding-bottom: 1rem;
+        }
+
+        .suggestions-grid {
+          display: grid;
+          grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+          gap: 2rem;
+          max-width: 1200px;
+          margin: 0 auto;
+        }
+
+        .suggestion-card {
+          background: white;
+          padding: 1.5rem;
+          border-radius: 1rem;
+          box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+          display: flex;
+          flex-direction: column;
+          gap: 1.25rem;
+        }
+
+        .suggestion-icon {
+          width: 2.5rem;
+          height: 2.5rem;
+          background: #f7fafc;
+          border-radius: 0.5rem;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          font-size: 1.25rem;
+        }
+
+        .suggestion-title {
+          font-size: 1rem;
+          color: #2d3748;
+          margin: 0;
+          line-height: 1.5;
+        }
+
+        .impact-label {
+          color: #718096;
+          font-size: 0.875rem;
+        }
+
+        .impact-meter {
+          flex: 1;
+          height: 0.375rem;
+          background: #edf2f7;
+          border-radius: 0.25rem;
+          overflow: hidden;
+        }
+
+        .impact-fill {
+          height: 100%;
+          background: #4299e1;
+          border-radius: 0.25rem;
+        }
+
+        .primary-action {
+          width: 100%;
+          padding: 0.75rem;
+          background: #4299e1;
+          color: white;
+          border: none;
+          border-radius: 0.5rem;
+          font-weight: 500;
+          cursor: pointer;
+          transition: background 0.2s;
+        }
+
+        .primary-action:hover {
+          background: #3182ce;
+        }
+
+        .or-divider {
+          display: block;
+          text-align: center;
+          color: #718096;
+          margin: 0.75rem 0;
+          font-size: 0.875rem;
+        }
+
+        .alternative-description {
+          color: #718096;
+          font-size: 0.875rem;
+          text-align: center;
+          margin: 0.5rem 0;
+        }
+
+        .secondary-action {
+          width: 100%;
+          padding: 0.75rem;
+          background: white;
+          color: #4299e1;
+          border: 1px solid #4299e1;
+          border-radius: 0.5rem;
+          font-weight: 500;
+          cursor: pointer;
+          transition: all 0.2s;
+        }
+
+        .secondary-action:hover {
+          background: #ebf8ff;
+        }
+
+        .impact-meter-container {
+          display: flex;
+          align-items: center;
+          gap: 0.75rem;
+        }
+
+        .suggestion-header {
+          display: flex;
+          gap: 1rem;
+          align-items: flex-start;
+        }
+
+        .suggestion-actions {
+          display: flex;
+          flex-direction: column;
+        }
+
+        @media (max-width: 768px) {
+          .suggestions-grid {
+            grid-template-columns: 1fr;
+          }
+          
+          .suggestions-section {
+            padding: 1rem;
+          }
+        }
+      `}</style>
     </div>
   );
 };
