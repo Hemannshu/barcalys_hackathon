@@ -1,11 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
+import { createUserWithEmailAndPassword, updateProfile } from 'firebase/auth';
 import { auth } from './firebase';
-import { 
-  createUserWithEmailAndPassword, 
-  updateProfile,
-  RecaptchaVerifier
-} from 'firebase/auth';
 import './SignupPage.css';
 import logo from './images/BCS-745d30bf.png';
 
@@ -21,73 +17,51 @@ const SignupPage = () => {
   const [isLoading, setIsLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
-  const [passwordValidations, setPasswordValidations] = useState({
-    length: false,
-    uppercase: false,
-    lowercase: false,
-    number: false,
-    specialChar: false
-  });
 
+  // Check if we're returning from face authentication
   useEffect(() => {
-    // Initialize reCAPTCHA (kept for potential future use)
-    window.recaptchaVerifier = new RecaptchaVerifier(auth, 'recaptcha-container', {
-      'size': 'invisible'
-    });
-
-    return () => {
-      if (window.recaptchaVerifier) {
-        window.recaptchaVerifier.clear();
-      }
-    };
+    const urlParams = new URLSearchParams(window.location.search);
+    const fromFaceAuth = urlParams.get('fromFaceAuth');
+    
+    if (fromFaceAuth === 'true') {
+      // Clear any error messages
+      setError('');
+    }
   }, []);
 
   const handleChange = (e) => {
     const { name, value } = e.target;
     setFormData(prev => ({ ...prev, [name]: value }));
+  };
 
-    // Password validation checks
-    if (name === 'password') {
-      setPasswordValidations({
-        length: value.length >= 10,
-        uppercase: /[A-Z]/.test(value),
-        lowercase: /[a-z]/.test(value),
-        number: /[0-9]/.test(value),
-        specialChar: /[!@#$%^&*(),.?":{}|<>]/.test(value)
-      });
+  const togglePasswordVisibility = (field) => {
+    if (field === 'password') {
+      setShowPassword(!showPassword);
+    } else {
+      setShowConfirmPassword(!showConfirmPassword);
     }
-  };
-
-  const togglePasswordVisibility = () => {
-    setShowPassword(!showPassword);
-  };
-
-  const toggleConfirmPasswordVisibility = () => {
-    setShowConfirmPassword(!showConfirmPassword);
-  };
-
-  const isPasswordValid = () => {
-    return Object.values(passwordValidations).every(Boolean);
   };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
     setError('');
-
-    if (!isPasswordValid()) {
-      setError('Password does not meet all requirements');
-      return;
-    }
-
-    if (formData.password !== formData.confirmPassword) {
-      setError('Passwords do not match');
-      return;
-    }
-
     setIsLoading(true);
 
+    // Validate password strength
+    if (formData.password.length < 8) {
+      setError('Password must be at least 8 characters long');
+      setIsLoading(false);
+      return;
+    }
+
+    // Check if passwords match
+    if (formData.password !== formData.confirmPassword) {
+      setError('Passwords do not match');
+      setIsLoading(false);
+      return;
+    }
+
     try {
-      // Create user with email/password
       const userCredential = await createUserWithEmailAndPassword(
         auth,
         formData.email,
@@ -96,33 +70,32 @@ const SignupPage = () => {
 
       const user = userCredential.user;
 
-      // Update user profile
+      // Update user profile with display name
       await updateProfile(user, {
         displayName: formData.fullName
       });
 
-      // Store user data in localStorage
-      localStorage.setItem('token', user.refreshToken);
+      localStorage.setItem('token', await user.getIdToken());
       localStorage.setItem('userId', user.uid);
-      localStorage.setItem('email', formData.email);
+      localStorage.setItem('email', user.email);
       localStorage.setItem('displayName', formData.fullName);
 
       // Redirect to face authentication HTML page
       window.location.href = '/face-auth.html?action=enroll';
     } catch (err) {
       console.error('Signup error:', err);
-      let errorMessage = err.message;
+      let errorMessage = 'An error occurred during signup. Please try again.';
       
-      // Handle specific Firebase errors
       if (err.code === 'auth/email-already-in-use') {
-        errorMessage = 'This email is already registered. Please try logging in.';
+        errorMessage = 'Email is already in use';
       } else if (err.code === 'auth/network-request-failed') {
-        errorMessage = 'Network error. Please check your internet connection and try again.';
+        errorMessage = 'Network error. Please check your internet connection';
       } else if (err.code === 'auth/weak-password') {
-        errorMessage = 'Password is too weak. Please use a stronger password.';
+        errorMessage = 'Password is too weak';
       }
       
       setError(errorMessage);
+    } finally {
       setIsLoading(false);
     }
   };
@@ -158,8 +131,8 @@ const SignupPage = () => {
             <span className="logo-part-1">Breach.</span>
             <span className="logo-part-2">AI</span>
           </div>
-          <h2>Create Your Account</h2>
-          <p className="subheader">Fortify Before They Breach</p>
+          <h2>Create Account</h2>
+          <p className="subheader">Join us to secure your passwords</p>
         </div>
 
         <form onSubmit={handleSubmit} className="signup-form">
@@ -220,7 +193,7 @@ const SignupPage = () => {
               <button 
                 type="button" 
                 className="password-toggle"
-                onClick={togglePasswordVisibility}
+                onClick={() => togglePasswordVisibility('password')}
                 aria-label={showPassword ? "Hide password" : "Show password"}
               >
                 {showPassword ? (
@@ -245,26 +218,6 @@ const SignupPage = () => {
                 placeholder="••••••••"
               />
             </div>
-            <div className="password-requirements">
-              <h4>Password Requirements:</h4>
-              <ul>
-                <li className={passwordValidations.length ? 'valid' : ''}>
-                  {passwordValidations.length ? '✓' : '•'} At least 10 characters
-                </li>
-                <li className={passwordValidations.uppercase ? 'valid' : ''}>
-                  {passwordValidations.uppercase ? '✓' : '•'} At least one uppercase letter
-                </li>
-                <li className={passwordValidations.lowercase ? 'valid' : ''}>
-                  {passwordValidations.lowercase ? '✓' : '•'} At least one lowercase letter
-                </li>
-                <li className={passwordValidations.number ? 'valid' : ''}>
-                  {passwordValidations.number ? '✓' : '•'} At least one number
-                </li>
-                <li className={passwordValidations.specialChar ? 'valid' : ''}>
-                  {passwordValidations.specialChar ? '✓' : '•'} At least one special character
-                </li>
-              </ul>
-            </div>
           </div>
 
           <div className="form-group">
@@ -273,7 +226,7 @@ const SignupPage = () => {
               <button 
                 type="button" 
                 className="password-toggle"
-                onClick={toggleConfirmPasswordVisibility}
+                onClick={() => togglePasswordVisibility('confirm')}
                 aria-label={showConfirmPassword ? "Hide password" : "Show password"}
               >
                 {showConfirmPassword ? (
@@ -300,12 +253,10 @@ const SignupPage = () => {
             </div>
           </div>
 
-          <div id="recaptcha-container"></div>
-
           <button 
             type="submit" 
             className="signup-button"
-            disabled={isLoading || !isPasswordValid()}
+            disabled={isLoading}
           >
             {isLoading ? (
               <>
@@ -317,9 +268,9 @@ const SignupPage = () => {
             ) : 'Create Account'}
           </button>
 
-          <div className="login-redirect">
+          <div className="signup-redirect">
             Already have an account? 
-            <Link to="/login" className="login-link">Sign in</Link>
+            <Link to="/login" className="signup-link">Sign in</Link>
           </div>
         </form>
       </div>

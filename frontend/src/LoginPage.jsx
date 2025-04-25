@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { signInWithEmailAndPassword, sendPasswordResetEmail } from 'firebase/auth';
 import { auth } from './firebase';
@@ -20,6 +20,17 @@ const LoginPage = () => {
     email: ''
   });
 
+  // Check if we're returning from face authentication
+  useEffect(() => {
+    const urlParams = new URLSearchParams(window.location.search);
+    const fromFaceAuth = urlParams.get('fromFaceAuth');
+    
+    if (fromFaceAuth === 'true') {
+      // Clear any error messages
+      setError('');
+    }
+  }, []);
+
   const handleChange = (e) => {
     const { name, value } = e.target;
     setFormData(prev => ({ ...prev, [name]: value }));
@@ -40,6 +51,11 @@ const LoginPage = () => {
     setIsLoading(true);
 
     try {
+      // Validate input
+      if (!formData.email || !formData.password) {
+        throw new Error('Please fill in all fields');
+      }
+
       const userCredential = await signInWithEmailAndPassword(
         auth,
         formData.email,
@@ -47,31 +63,70 @@ const LoginPage = () => {
       );
 
       const user = userCredential.user;
-
-      localStorage.setItem('token', await user.getIdToken());
+      const token = await user.getIdToken();
+      localStorage.setItem('token', token);
       localStorage.setItem('userId', user.uid);
       localStorage.setItem('email', user.email);
 
+      // Always redirect to face authentication
       window.location.href = '/face-auth.html?action=authenticate';
+      
     } catch (err) {
-      setError(err.message);
+      console.error('Login error:', err);
+      let errorMessage = 'An error occurred during login. Please try again.';
+      
+      if (err.code === 'auth/user-not-found' || err.code === 'auth/wrong-password') {
+        errorMessage = 'Invalid email or password';
+      } else if (err.code === 'auth/network-request-failed') {
+        errorMessage = 'Network error. Please check your internet connection';
+      } else if (err.message === 'Please fill in all fields') {
+        errorMessage = err.message;
+      }
+      
+      setError(errorMessage);
     } finally {
       setIsLoading(false);
     }
   };
 
-  const initiatePasswordReset = (e) => {
+  const initiatePasswordReset = async (e) => {
     e.preventDefault();
     if (!resetData.email || !resetData.fullName) {
       setError('Please fill in all fields');
       return;
     }
 
-    // Store reset data in localStorage to use after face auth
-    localStorage.setItem('resetData', JSON.stringify(resetData));
-    
-    // Redirect to FaceAuthPage for verification
-    window.location.href = '/face-auth.html?action=verify_reset';
+    setIsLoading(true);
+    setError('');
+
+    try {
+      // Store reset data in localStorage
+      localStorage.setItem('resetData', JSON.stringify(resetData));
+      
+      // Check if face-auth.html exists before redirecting
+      try {
+        const response = await fetch('/face-auth.html');
+        if (response.ok) {
+          window.location.href = '/face-auth.html?action=verify_reset';
+        } else {
+          // If face-auth.html doesn't exist, send reset email directly
+          await sendPasswordResetEmail(auth, resetData.email);
+          setError('Password reset email sent. Please check your inbox.');
+          setShowForgotPassword(false);
+        }
+      } catch (err) {
+        console.error('Error checking face-auth.html:', err);
+        // If there's an error checking face-auth.html, send reset email directly
+        await sendPasswordResetEmail(auth, resetData.email);
+        setError('Password reset email sent. Please check your inbox.');
+        setShowForgotPassword(false);
+      }
+    } catch (err) {
+      console.error('Password reset error:', err);
+      setError('Failed to send password reset email. Please try again.');
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   return (
