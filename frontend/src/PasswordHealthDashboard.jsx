@@ -20,6 +20,10 @@ const PasswordHealthDashboard = () => {
   const [user, setUser] = useState(null);
   const navigate = useNavigate();
 
+  const handleLogout = () => {
+    navigate('/');
+  };
+
   // Debugging logs
   useEffect(() => {
     console.log('Current user:', user);
@@ -420,6 +424,12 @@ const PasswordHealthDashboard = () => {
 
   return (
     <div className="dashboard-container">
+      <button 
+        onClick={handleLogout}
+        className="logout-button"
+      >
+        Logout
+      </button>
       <h1>Password Health Dashboard</h1>
       
       {error && (
