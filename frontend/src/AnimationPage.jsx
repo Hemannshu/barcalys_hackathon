@@ -4,7 +4,7 @@ import './AnimationPage.css';
 
 const AnimationPage = ({ onComplete }) => {
   const navigate = useNavigate();
-  const duration = 3000; // 3 seconds
+  const duration = 1500; // 3 seconds
 
   useEffect(() => {
     const timer = setTimeout(() => {
@@ -17,15 +17,17 @@ const AnimationPage = ({ onComplete }) => {
 
   return (
     <div className="animation-container">
-      {/* Animated binary matrix background */}
+      {/* Dull binary matrix background */}
       <div className="binary-matrix">
-        {Array.from({ length: 150 }).map((_, i) => (
+        {Array.from({ length: 400 }).map((_, i) => (
           <span 
             key={i} 
             className="binary-digit"
             style={{
               animationDelay: `${Math.random() * 2}s`,
-              color: Math.random() > 0.7 ? '#00AEEF' : '#FFFFFF'
+              left: `${Math.random() * 100}%`,
+              top: `${Math.random() * 100}%`,
+              opacity: 0.08 + Math.random() * 0.07 // Very low opacity range
             }}
           >
             {Math.random() > 0.5 ? '1' : '0'}
@@ -41,29 +43,6 @@ const AnimationPage = ({ onComplete }) => {
           <div className="shield-ring delay-1"></div>
           <div className="shield-ring delay-2"></div>
         </div>
-      </div>
-
-      {/* Password strength visualization */}
-      <div className="password-strength">
-        {['W', 'E', 'A', 'K'].map((char, i) => (
-          <div 
-            key={i} 
-            className="strength-char"
-            style={{ animationDelay: `${i * 0.2}s` }}
-          >
-            {char}
-          </div>
-        ))}
-        <div className="strength-transform">→</div>
-        {['S', 'T', 'R', 'O', 'N', 'G'].map((char, i) => (
-          <div 
-            key={i+4} 
-            className="strength-char strong"
-            style={{ animationDelay: `${0.8 + i * 0.15}s` }}
-          >
-            {char}
-          </div>
-        ))}
       </div>
 
       {/* Main title */}
