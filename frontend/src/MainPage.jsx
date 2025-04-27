@@ -6,6 +6,10 @@ import logo from "./images/BCS-745d30bf.png";
 import { useNavigate } from "react-router-dom";
 import Chatbot from "./Chatbot";
 import Mainpage from "./MainPage.css";
+import { Chart as ChartJS, RadialLinearScale, PointElement, LineElement, Filler, Tooltip, Legend } from 'chart.js';
+import { Radar } from 'react-chartjs-2';
+
+ChartJS.register(RadialLinearScale, PointElement, LineElement, Filler, Tooltip, Legend);
 
 // Helper function to safely parse JSON
 const safeJSONParse = (data, fallback = null) => {
@@ -366,6 +370,117 @@ const MainPage = ({ password, setPassword, showPassword, setShowPassword }) => {
   const [showChatbot, setShowChatbot] = useState(false);
   const [showAttackVisualization, setShowAttackVisualization] = useState(false);
   const navigate = useNavigate();
+
+  // Add new state for radar chart data and modal
+  const [showAttackAnalysis, setShowAttackAnalysis] = useState(false);
+  const [radarData, setRadarData] = useState({
+    labels: ['Dictionary Attack', 'Brute Force', 'Pattern Based', 'Rainbow Table', 'Social Engineering', 'Quantum'],
+    datasets: [{
+      label: 'Attack Vulnerability',
+      data: [0, 0, 0, 0, 0, 0],
+      backgroundColor: 'rgba(0, 255, 255, 0.2)',
+      borderColor: 'rgba(0, 255, 255, 1)',
+      borderWidth: 2,
+      pointBackgroundColor: 'rgba(0, 255, 255, 1)',
+      pointBorderColor: '#fff',
+      pointHoverBackgroundColor: '#fff',
+      pointHoverBorderColor: 'rgba(0, 255, 255, 1)'
+    }]
+  });
+
+  // Add radar options configuration
+  const radarOptions = {
+    scales: {
+      r: {
+        beginAtZero: true,
+        max: 100,
+        ticks: {
+          stepSize: 20,
+          color: 'rgba(0, 255, 255, 0.8)',
+          backdropColor: 'transparent'
+        },
+        grid: {
+          color: 'rgba(0, 255, 255, 0.3)'
+        },
+        angleLines: {
+          color: 'rgba(0, 255, 255, 0.3)'
+        },
+        pointLabels: {
+          color: 'rgba(0, 255, 255, 0.8)',
+          font: {
+            size: 12
+          }
+        }
+      }
+    },
+    plugins: {
+      legend: {
+        display: false
+      },
+      tooltip: {
+        callbacks: {
+          label: function(context) {
+            return `Vulnerability: ${context.raw.toFixed(1)}%`;
+          }
+        }
+      }
+    },
+    elements: {
+      line: {
+        tension: 0.2
+      }
+    },
+    maintainAspectRatio: false
+  };
+
+  // Add calculateAttackVulnerabilities function
+  const calculateAttackVulnerabilities = (pwd) => {
+    if (!pwd) return [0, 0, 0, 0, 0, 0];
+
+    // Dictionary Attack vulnerability (based on common words and patterns)
+    const dictionaryVulnerability = /^[a-zA-Z]+$/.test(pwd) ? 0.8 : 
+                                  /password|admin|123456/.test(pwd.toLowerCase()) ? 1 : 0.2;
+
+    // Brute Force vulnerability (based on length and character set)
+    const bruteForceVulnerability = Math.max(0, 1 - (pwd.length / 16));
+
+    // Pattern Based vulnerability
+    const patternVulnerability = /(.)\1{2,}/.test(pwd) ? 0.8 :  // Repeating characters
+                                /123|abc|qwerty/.test(pwd.toLowerCase()) ? 0.9 : 0.3;
+
+    // Rainbow Table vulnerability (based on complexity and length)
+    const rainbowVulnerability = pwd.length < 8 ? 0.9 :
+                                /^[a-zA-Z0-9]+$/.test(pwd) ? 0.7 : 0.4;
+
+    // Social Engineering vulnerability (based on common personal info patterns)
+    const socialVulnerability = /19\d{2}|20\d{2}|jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec/i.test(pwd) ? 0.8 : 0.3;
+
+    // Quantum Computing vulnerability (based on encryption strength needed)
+    const quantumVulnerability = pwd.length < 12 ? 0.7 :
+                                pwd.length < 16 ? 0.5 : 0.3;
+
+    return [
+      dictionaryVulnerability,
+      bruteForceVulnerability,
+      patternVulnerability,
+      rainbowVulnerability,
+      socialVulnerability,
+      quantumVulnerability
+    ].map(v => v * 100); // Convert to percentage
+  };
+
+  // Add handleAttackAnalysis function
+  const handleAttackAnalysis = () => {
+    const vulnerabilities = calculateAttackVulnerabilities(password);
+    setRadarData(prev => ({
+      ...prev,
+      datasets: [{
+        ...prev.datasets[0],
+        data: vulnerabilities
+      }]
+    }));
+    setShowAttackAnalysis(true);
+  };
 
   useEffect(() => {
     // Check if user has completed face authentication
@@ -1115,19 +1230,23 @@ const MainPage = ({ password, setPassword, showPassword, setShowPassword }) => {
 
         {(analysis || password) && (
           <div className="results-container">
+            {/* Password Metrics Section */}
             <div className="metrics-section">
               <h3>Password Metrics</h3>
               <div className="metrics-grid">
                 <div className="metric-card">
                   <div className="metric-value">
                     {password
-                      ? Math.round(
-                          analysis?.entropyScore ||
-                            analyzePassword(password).entropyScore ||
-                            0
-                        )
-                      : 0}
-                    /100
+                      ? (mlResults?.details?.entropy !== undefined
+                          ? mlResults.details.entropy.toFixed(2)
+                          : Math.round(
+                              analysis?.entropyScore ||
+                              analyzePassword(password).entropyScore ||
+                              0
+                            )
+                      )
+                    : 0}
+                    <span style={{ fontSize: '0.9em', color: '#888', marginLeft: 4 }}>bits</span>
                   </div>
                   <div className="metric-label">Entropy</div>
                 </div>
@@ -1163,13 +1282,16 @@ const MainPage = ({ password, setPassword, showPassword, setShowPassword }) => {
                     : 0
                 }
               />
-              <button
-                className="visualize-attack-btn"
-                onClick={() => setShowAttackVisualization(true)}
-                disabled={!password}
-              >
-                Visualize Attack Analysis
-              </button>
+              {/* Centered and styled Visualize Attack Analysis button */}
+              <div className="center-btn-row">
+                <button
+                  className="primary-gradient-btn"
+                  onClick={handleAttackAnalysis}
+                  disabled={!password}
+                >
+                  Visualize Attack Analysis
+                </button>
+              </div>
             </div>
 
             {showAttackVisualization && (
@@ -2192,6 +2314,276 @@ const MainPage = ({ password, setPassword, showPassword, setShowPassword }) => {
           </div>
         </div>
       )}
+
+      {/* Update the Attack Analysis Modal */}
+      {showAttackAnalysis && (
+        <div className="modal-overlay">
+          <div className="attack-analysis-modal">
+            <div className="modal-header">
+              <h2>Password Attack Vulnerability Analysis</h2>
+              <button className="close-button" onClick={() => setShowAttackAnalysis(false)}>×</button>
+            </div>
+            
+            <div className="modal-input-section">
+              <div className="input-group">
+                <input
+                  type={showPassword ? "text" : "password"}
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  placeholder="Enter your password"
+                  className="password-input"
+                />
+                <button
+                  className="toggle-visibility"
+                  onClick={() => setShowPassword(!showPassword)}
+                  aria-label={showPassword ? "Hide password" : "Show password"}
+                >
+                  {showPassword ? "Hide" : "Show"}
+                </button>
+                <button
+                  className="analyze-button"
+                  onClick={handleAttackAnalysis}
+                  disabled={!password}
+                >
+                  Analyze Password
+                </button>
+              </div>
+            </div>
+
+            <div className="radar-container">
+              <div className="radar-chart">
+                <Radar data={radarData} options={radarOptions} />
+              </div>
+              <div className="radar-legend">
+                <h4>Vulnerability Levels</h4>
+                <div className="legend-items">
+                  {radarData.labels.map((label, index) => (
+                    <div key={label} className="legend-item">
+                      <span className="legend-label">{label}:</span>
+                      <span className="legend-value" style={{
+                        color: radarData.datasets[0].data[index] > 70 ? '#ff4444' :
+                              radarData.datasets[0].data[index] > 40 ? '#ffbb33' : '#00C851'
+                      }}>
+                        {radarData.datasets[0].data[index].toFixed(1)}%
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      <style jsx>{`
+        /* ... existing styles ... */
+
+        .modal-overlay {
+          position: fixed;
+          top: 0;
+          left: 0;
+          right: 0;
+          bottom: 0;
+          background: rgba(0, 0, 0, 0.85);
+          display: flex;
+          justify-content: center;
+          align-items: center;
+          z-index: 1000;
+        }
+
+        .attack-analysis-modal {
+          background: #1a1f2e;
+          border-radius: 16px;
+          padding: 2rem;
+          width: 90%;
+          max-width: 1200px;
+          max-height: 90vh;
+          overflow-y: auto;
+          box-shadow: 0 4px 24px rgba(0,0,0,0.5);
+        }
+
+        .modal-header {
+          display: flex;
+          justify-content: space-between;
+          align-items: center;
+          margin-bottom: 2rem;
+          padding-bottom: 1rem;
+          border-bottom: 2px solid #23263a;
+        }
+
+        .modal-header h2 {
+          color: #fff;
+          font-size: 1.5rem;
+          margin: 0;
+          font-weight: 700;
+        }
+
+        .close-button {
+          background: none;
+          border: none;
+          color: #b0b3c6;
+          font-size: 2rem;
+          cursor: pointer;
+          padding: 0;
+          line-height: 1;
+          transition: color 0.3s ease;
+        }
+        .close-button:hover {
+          color: #00ffff;
+        }
+
+        .modal-input-section {
+          margin-bottom: 2rem;
+        }
+
+        .input-group {
+          display: flex;
+          gap: 0.5rem;
+          align-items: center;
+        }
+
+        .password-input {
+          flex: 1;
+          padding: 0.75rem 1rem;
+          border: 1px solid #23263a;
+          border-radius: 6px;
+          font-size: 1rem;
+          background: #23263a;
+          color: #fff;
+          transition: border-color 0.3s ease;
+        }
+        .password-input:focus {
+          outline: none;
+          border-color: #00ffff;
+        }
+
+        .toggle-visibility {
+          padding: 0.75rem 1rem;
+          background: #23263a;
+          border: 1px solid #23263a;
+          border-radius: 6px;
+          color: #b0b3c6;
+          font-size: 0.95rem;
+          cursor: pointer;
+          transition: all 0.3s ease;
+        }
+        .toggle-visibility:hover {
+          background: #262c42;
+          color: #00ffff;
+        }
+
+        .analyze-button {
+          padding: 0.75rem 1.5rem;
+          background: #00ffff;
+          color: #1a1f2e;
+          border: none;
+          border-radius: 6px;
+          font-size: 1rem;
+          font-weight: 600;
+          cursor: pointer;
+          transition: all 0.3s ease;
+        }
+        .analyze-button:hover:not(:disabled) {
+          background: #00e6e6;
+        }
+        .analyze-button:disabled {
+          background: #23263a;
+          color: #888;
+          cursor: not-allowed;
+        }
+
+        .radar-container {
+          display: grid;
+          grid-template-columns: 1fr 1fr;
+          gap: 2rem;
+          background: #181b29;
+          border-radius: 16px;
+          padding: 2rem;
+        }
+        .radar-chart {
+          height: 400px;
+          background: #23263a;
+          border-radius: 16px;
+          padding: 1rem;
+          box-shadow: 0 2px 8px rgba(0,0,0,0.15);
+        }
+        .radar-legend {
+          padding: 1.5rem;
+          background: #23263a;
+          border-radius: 16px;
+          box-shadow: 0 2px 8px rgba(0,0,0,0.15);
+        }
+        .radar-legend h4 {
+          color: #fff;
+          margin: 0 0 1rem 0;
+          font-size: 1.1rem;
+          font-weight: 700;
+        }
+        .legend-items {
+          display: grid;
+          gap: 0.75rem;
+        }
+        .legend-item {
+          display: flex;
+          justify-content: space-between;
+          padding: 0.75rem;
+          background: #181b29;
+          border-radius: 8px;
+          color: #fff;
+          font-size: 1rem;
+        }
+        .legend-label {
+          font-weight: 500;
+        }
+        @media (max-width: 768px) {
+          .input-group {
+            flex-direction: column;
+          }
+          .password-input,
+          .toggle-visibility,
+          .analyze-button {
+            width: 100%;
+          }
+          .radar-container {
+            grid-template-columns: 1fr;
+          }
+          .radar-chart {
+            height: 300px;
+          }
+        }
+
+        .center-btn-row {
+          display: flex;
+          justify-content: center;
+          align-items: center;
+          margin: 2rem 0 1rem 0;
+        }
+
+        .primary-gradient-btn {
+          background: linear-gradient(90deg, #36d1e7 0%, #1e8fff 100%);
+          color: #fff;
+          font-size: 1.2rem;
+          font-weight: 700;
+          border: none;
+          border-radius: 12px;
+          padding: 0.9rem 2.2rem;
+          box-shadow: 0 2px 8px rgba(30,143,255,0.08);
+          cursor: pointer;
+          transition: background 0.2s, transform 0.2s;
+          margin: 0 auto;
+          display: block;
+        }
+        .primary-gradient-btn:hover:not(:disabled) {
+          background: linear-gradient(90deg, #1e8fff 0%, #36d1e7 100%);
+          transform: translateY(-2px) scale(1.03);
+        }
+        .primary-gradient-btn:disabled {
+          background: #b0c4de;
+          color: #f0f0f0;
+          cursor: not-allowed;
+          box-shadow: none;
+        }
+      `}</style>
     </div>
   );
 };
