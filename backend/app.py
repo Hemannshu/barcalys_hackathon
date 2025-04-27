@@ -6,6 +6,7 @@ import datetime
 from functools import wraps
 from password_ml import MLPasswordAnalyzer
 from hash_ml.hash_analyzer import HashVulnerabilityAnalyzer
+from password_generator import generate_password
 
 app = Flask(__name__, static_folder='../frontend/build')
 CORS(app, resources={
@@ -237,6 +238,32 @@ def analyze_hash(current_user):
 
     except Exception as e:
         app.logger.error(f"Error analyzing hash: {str(e)}")
+        return jsonify({
+            'error': True,
+            'message': f'Internal server error: {str(e)}'
+        }), 500
+
+@app.route('/api/generate-password', methods=['POST'])
+def generate_password_endpoint():
+    """Generate a secure, memorable password using pattern-based transformations."""
+    try:
+        data = request.get_json()
+        if not data or 'context' not in data:
+            return jsonify({
+                'error': True,
+                'message': 'Missing context information'
+            }), 400
+
+        context = data['context']
+        existing_password = data.get('existing_password', '')
+        
+        # Use the password generator module
+        password_data = generate_password(context, existing_password)
+        
+        return jsonify(password_data), 200
+            
+    except Exception as e:
+        app.logger.error(f"Error generating password: {str(e)}")
         return jsonify({
             'error': True,
             'message': f'Internal server error: {str(e)}'
