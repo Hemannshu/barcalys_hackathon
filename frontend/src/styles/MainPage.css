@@ -1,0 +1,141 @@
+/* Vulnerability Analysis Modal Styles */
+.vulnerability-summary {
+  display: flex;
+  justify-content: space-between;
+  margin-bottom: 2rem;
+  padding: 1rem;
+  background: rgba(255, 255, 255, 0.05);
+  border-radius: 8px;
+}
+
+.strength-indicator {
+  flex: 1;
+  margin-right: 2rem;
+}
+
+.strength-meter {
+  height: 12px;
+  background: rgba(255, 255, 255, 0.1);
+  border-radius: 6px;
+  overflow: hidden;
+  margin: 0.5rem 0;
+}
+
+.strength-meter.very-weak .strength-fill { background: #ff4444; }
+.strength-meter.weak .strength-fill { background: #ffa700; }
+.strength-meter.medium .strength-fill { background: #ffeb3b; }
+.strength-meter.strong .strength-fill { background: #4caf50; }
+.strength-meter.very-strong .strength-fill { background: #00c853; }
+
+.strength-fill {
+  height: 100%;
+  transition: width 0.3s ease;
+}
+
+.entropy-score {
+  text-align: center;
+  padding: 0 1rem;
+}
+
+.entropy-score h3 {
+  margin-bottom: 0.5rem;
+}
+
+.entropy-score p {
+  font-size: 1.5rem;
+  font-weight: bold;
+  color: #4caf50;
+}
+
+.vulnerability-details {
+  margin: 2rem 0;
+  padding: 1rem;
+  background: rgba(255, 255, 255, 0.05);
+  border-radius: 8px;
+}
+
+.details-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+  gap: 2rem;
+  margin-top: 1rem;
+}
+
+.detail-item h4 {
+  margin-bottom: 1rem;
+  color: #64b5f6;
+}
+
+.detail-item ul {
+  list-style: none;
+  padding: 0;
+}
+
+.detail-item li {
+  padding: 0.5rem 0;
+  color: rgba(255, 255, 255, 0.7);
+}
+
+.detail-item li.present {
+  color: #4caf50;
+}
+
+.attack-type-card {
+  background: rgba(255, 255, 255, 0.05);
+  border-radius: 8px;
+  padding: 1.5rem;
+  transition: transform 0.2s ease;
+}
+
+.attack-type-card:hover {
+  transform: translateY(-2px);
+}
+
+.risk-meter {
+  height: 8px;
+  background: rgba(255, 255, 255, 0.1);
+  border-radius: 4px;
+  overflow: hidden;
+  margin: 1rem 0;
+}
+
+.risk-fill {
+  height: 100%;
+  background: linear-gradient(to right, #4caf50, #ffa700, #ff4444);
+  transition: width 0.3s ease;
+}
+
+.attack-details {
+  margin-top: 1rem;
+}
+
+.attack-details p {
+  margin: 0.5rem 0;
+  font-size: 0.9rem;
+  color: rgba(255, 255, 255, 0.8);
+}
+
+.attack-recommendations {
+  margin-top: 2rem;
+  padding: 1rem;
+  background: rgba(255, 255, 255, 0.05);
+  border-radius: 8px;
+}
+
+.attack-recommendations ul {
+  list-style: none;
+  padding: 0;
+  margin-top: 1rem;
+}
+
+.attack-recommendations li {
+  padding: 0.5rem 0;
+  color: rgba(255, 255, 255, 0.8);
+  display: flex;
+  align-items: center;
+}
+
+.attack-recommendations li::before {
+  content: "⚠️";
+  margin-right: 0.5rem;
+} 
