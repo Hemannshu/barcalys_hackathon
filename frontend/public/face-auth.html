@@ -194,7 +194,7 @@
                         localStorage.setItem('facialId', userInfo.facialId);
                         statusDiv.innerHTML = '<div class="success">Face registration successful!</div>';
                         setTimeout(() => {
-                            window.location.href = '/dashboard';
+                            window.location.href = '/login';
                         }, 2000);
                     } catch (errCode) {
                         handleError(errCode);
