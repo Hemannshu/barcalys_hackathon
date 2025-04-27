@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { collection, addDoc, query, where, getDocs } from 'firebase/firestore';
-import { onAuthStateChanged } from 'firebase/auth';
+import { collection, addDoc, query, where, getDocs, doc, setDoc, serverTimestamp } from 'firebase/firestore';
+import { onAuthStateChanged, signOut } from 'firebase/auth';
 import { pwnedPassword } from 'hibp';
 import { db, auth } from './firebase';
 import './PasswordHealthDashboard.css';
@@ -18,10 +18,71 @@ const PasswordHealthDashboard = () => {
     notes: ''
   });
   const [user, setUser] = useState(null);
+  const [sessionTime, setSessionTime] = useState(0);
+  const [sessionTimer, setSessionTimer] = useState(null);
   const navigate = useNavigate();
 
-  const handleLogout = () => {
-    navigate('/');
+  // Format time in HH:MM:SS
+  const formatTime = (seconds) => {
+    const hours = Math.floor(seconds / 3600);
+    const minutes = Math.floor((seconds % 3600) / 60);
+    const secs = seconds % 60;
+    return `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
+  };
+
+  // Start session timer
+  const startSessionTimer = () => {
+    const timer = setInterval(() => {
+      setSessionTime(prev => prev + 1);
+    }, 1000);
+    setSessionTimer(timer);
+  };
+
+  // Stop session timer
+  const stopSessionTimer = () => {
+    if (sessionTimer) {
+      clearInterval(sessionTimer);
+      setSessionTimer(null);
+    }
+  };
+
+  const handleLogout = async () => {
+    try {
+      // First stop the timer
+      stopSessionTimer();
+      
+      // Store session data if user exists
+      if (user && user.uid) {
+        try {
+          const sessionData = {
+            userId: user.uid,
+            sessionDuration: sessionTime,
+            logoutTime: serverTimestamp(),
+            date: new Date().toLocaleDateString(),
+            day: new Date().toLocaleDateString('en-US', { weekday: 'long' })
+          };
+          
+          await setDoc(doc(db, 'sessions', `${user.uid}_${Date.now()}`), sessionData);
+        } catch (err) {
+          console.error('Error storing session data:', err);
+          // Continue with logout even if session storage fails
+        }
+      }
+      
+      // Clear local storage first
+      localStorage.clear();
+      
+      // Then sign out from Firebase
+      await signOut(auth);
+      
+      // Finally navigate to main page
+      navigate('/main', { replace: true });
+    } catch (err) {
+      console.error('Error during logout:', err);
+      // If there's an error, still try to clear local storage and navigate
+      localStorage.clear();
+      navigate('/main', { replace: true });
+    }
   };
 
   // Debugging logs
@@ -30,19 +91,24 @@ const PasswordHealthDashboard = () => {
     console.log('Passwords state:', passwords);
   }, [user, passwords]);
 
-  // Check auth state
+  // Check auth state and start session
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, (currentUser) => {
       console.log('Auth state changed:', currentUser);
       if (currentUser) {
         setUser(currentUser);
         fetchPasswords(currentUser.uid);
+        startSessionTimer(); // Start timer when user is authenticated
       } else {
         console.log('No user, redirecting to login');
+        stopSessionTimer(); // Stop timer when user logs out
         navigate('/login');
       }
     });
-    return () => unsubscribe();
+    return () => {
+      unsubscribe();
+      stopSessionTimer(); // Cleanup timer on component unmount
+    };
   }, [navigate]);
 
   // Fetch passwords from Firestore with improved error handling
@@ -326,16 +392,6 @@ const PasswordHealthDashboard = () => {
     };
   };
 
-  const formatTime = (seconds) => {
-    if (seconds < 1) return 'less than a second';
-    if (seconds < 60) return `${seconds.toFixed(0)} seconds`;
-    if (seconds < 3600) return `${(seconds / 60).toFixed(0)} minutes`;
-    if (seconds < 86400) return `${(seconds / 3600).toFixed(1)} hours`;
-    if (seconds < 31536000) return `${(seconds / 86400).toFixed(1)} days`;
-    if (seconds < 31536000 * 100) return `${(seconds / 31536000).toFixed(1)} years`;
-    return 'centuries';
-  };
-
   const handleAddPassword = async (e) => {
     e.preventDefault();
     setIsLoading(true);
@@ -424,13 +480,28 @@ const PasswordHealthDashboard = () => {
 
   return (
     <div className="dashboard-container">
-      <button 
-        onClick={handleLogout}
-        className="logout-button"
-      >
-        Logout
-      </button>
-      <h1>Password Health Dashboard</h1>
+      <div className="dashboard-header">
+        <div className="user-info">
+          <h2>Welcome, {user?.displayName || 'User'}</h2>
+          <div className="session-info">
+            <span className="session-time">Session Time: {formatTime(sessionTime)}</span>
+            <span className="current-date">
+              {new Date().toLocaleDateString('en-US', { 
+                weekday: 'long',
+                year: 'numeric',
+                month: 'long',
+                day: 'numeric'
+              })}
+            </span>
+          </div>
+        </div>
+        <button 
+          onClick={handleLogout}
+          className="logout-button"
+        >
+          Logout
+        </button>
+      </div>
       
       {error && (
         <div className="error-message">
