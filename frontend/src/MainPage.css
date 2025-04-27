@@ -1180,3 +1180,189 @@ button:disabled {
     padding: 0.6rem 1.5rem;
     font-size: 0.9rem;
 }
+
+.visualize-attack-btn {
+    background: linear-gradient(135deg, #4fc3f7 0%, #2196f3 100%);
+    color: white;
+    width: 100%;
+    border: none;
+    padding: 0.8rem 1.5rem;
+    border-radius: 8px;
+    font-size: 1rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    margin-top: 1rem;
+    box-shadow: 0 2px 4px rgba(33, 150, 243, 0.2);
+}
+
+.visualize-attack-btn:hover {
+    background: linear-gradient(135deg, #2196f3 0%, #1976d2 100%);
+    transform: translateY(-2px);
+    box-shadow: 0 4px 8px rgba(33, 150, 243, 0.3);
+}
+
+.visualize-attack-btn:disabled {
+    background: #ccc;
+    cursor: not-allowed;
+    transform: none;
+    box-shadow: none;
+}
+
+.attack-visualization-modal {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(0, 0, 0, 0.7);
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    z-index: 1000;
+}
+
+.attack-visualization-content {
+    background: white;
+    border-radius: 12px;
+    padding: 2rem;
+    max-width: 900px;
+    width: 90%;
+    max-height: 90vh;
+    overflow-y: auto;
+    position: relative;
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.2);
+}
+
+.close-visualization {
+    position: absolute;
+    top: 1rem;
+    right: 1rem;
+    background: none;
+    border: none;
+    font-size: 1.5rem;
+    cursor: pointer;
+    color: #666;
+    padding: 0.5rem;
+    line-height: 1;
+    border-radius: 50%;
+    transition: background-color 0.2s;
+}
+
+.close-visualization:hover {
+    background-color: rgba(0, 0, 0, 0.1);
+}
+
+.attack-visualization-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+    gap: 1.5rem;
+    margin: 2rem 0;
+}
+
+.attack-type-card {
+    background: #f8f9fa;
+    border-radius: 10px;
+    padding: 1.5rem;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
+    transition: transform 0.2s, box-shadow 0.2s;
+}
+
+.attack-type-card:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+}
+
+.attack-type-card h3 {
+    margin: 0 0 1rem 0;
+    color: #2c3e50;
+    font-size: 1.2rem;
+}
+
+.risk-meter {
+    height: 8px;
+    background: #e9ecef;
+    border-radius: 4px;
+    overflow: hidden;
+    margin: 1rem 0;
+}
+
+.risk-fill {
+    height: 100%;
+    background: linear-gradient(90deg, #4fc3f7 0%, #2196f3 100%);
+    transition: width 0.3s ease;
+}
+
+.dictionary .risk-fill {
+    background: linear-gradient(90deg, #ff9800 0%, #f57c00 100%);
+}
+
+.brute-force .risk-fill {
+    background: linear-gradient(90deg, #4caf50 0%, #388e3c 100%);
+}
+
+.pattern .risk-fill {
+    background: linear-gradient(90deg, #e91e63 0%, #c2185b 100%);
+}
+
+.attack-details {
+    margin-top: 1rem;
+    font-size: 0.9rem;
+    color: #666;
+}
+
+.attack-details p {
+    margin: 0.5rem 0;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.attack-recommendations {
+    background: #f8f9fa;
+    border-radius: 10px;
+    padding: 1.5rem;
+    margin-top: 2rem;
+}
+
+.attack-recommendations h3 {
+    color: #2c3e50;
+    margin: 0 0 1rem 0;
+    font-size: 1.2rem;
+}
+
+.attack-recommendations ul {
+    list-style-type: none;
+    padding: 0;
+    margin: 0;
+}
+
+.attack-recommendations li {
+    margin: 0.75rem 0;
+    padding-left: 1.5rem;
+    position: relative;
+    color: #666;
+}
+
+.attack-recommendations li::before {
+    content: "•";
+    position: absolute;
+    left: 0;
+    color: #2196f3;
+    font-weight: bold;
+}
+
+@media (max-width: 768px) {
+    .attack-visualization-content {
+        padding: 1.5rem;
+        width: 95%;
+    }
+
+    .attack-visualization-grid {
+        grid-template-columns: 1fr;
+    }
+
+    .attack-type-card {
+        padding: 1rem;
+    }
+}
